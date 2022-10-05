@@ -1,5 +1,6 @@
 input/dirs.json
 *.nc
+test*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
