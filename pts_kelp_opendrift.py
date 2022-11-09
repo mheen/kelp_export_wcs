@@ -1,4 +1,3 @@
-from tools import get_files_in_dir, get_dir_from_json
 from opendrift.readers import reader_ROMS_native
 from models.opendrift_bottomdrifters import BottomDrifters
 from datetime import datetime, timedelta
@@ -23,7 +22,7 @@ def run(year:int, month:int, depth_release:int, n_particles=3*10**5, run_duratio
 
     input_files = f'/mnt/qnap/OPERATIONAL/ROMS/CWA/archive/{year}/perth_his_*.nc'
     release_shapefile = f'input/perth_{depth_release}m_polygon.shp'
-    if not os.path.exist(release_shapefile):
+    if not os.path.exists(release_shapefile):
         raise ValueError(f'Release shapefile for depth {depth_release} does not exist: {release_shapefile}')
     output_file = f'opendrift_output/perth_{year}-{month}_{depth_release}m.nc'
 
