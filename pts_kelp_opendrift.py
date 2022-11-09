@@ -29,10 +29,10 @@ def get_lon_lat_release_roms_depth(min_depth:float, max_depth:float) -> tuple:
     lat0 = bathymetry.lat[l_depth]
     return lon0, lat0
 
-def get_hourly_release_times(year:int, month:int, n_months=1) -> np.ndarray:
+def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np.ndarray:
     start_date = datetime(year, month, 1)
     n_days = (datetime(year, month+n_months, 1)-start_date).days
-    n_hours = n_days*24-1
+    n_hours = n_days*24/n_hours-n_hours
 
     release_times = []
     for i in range(n_hours):
@@ -44,7 +44,7 @@ def run(release_times:np.ndarray,
         lon_release:np.ndarray,
         lat_release:np.ndarray,
         file_description:str,
-        run_duration=90,
+        run_duration=60,
         dt=300, dt_out=3600):
     
     run_duration = timedelta(days=run_duration)
@@ -66,7 +66,7 @@ def run(release_times:np.ndarray,
     o.set_config('drift:vertical_advection', False) # turn on when considering particle properties
     o.set_config('drift:vertical_mixing', False) # consider adding: could be relevant
     o.set_config('drift:horizontal_diffusivity', 1) # [m2/s]
-    o.set_config('general:use_auto_landmask', False) # (uses landmask from ROMS)
+    # o.set_config('general:use_auto_landmask', False) # (uses landmask from ROMS) -> turned off: not working (?)
     o.set_config('general:coastline_action', 'stranding') # consider changing
 
     o.run(duration=run_duration, time_step=dt, time_step_output=dt_out,
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
         for year in years:
             for month in months:
-                times0 = get_hourly_release_times(year, month)
+                times0 = get_n_hourly_release_times(year, month)
 
                 log.info(f'Running simulation for depth {max_depths[d]}, {year}-{month}')
                 run(times0, lon0, lat0, file_description)
