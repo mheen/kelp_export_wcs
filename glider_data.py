@@ -176,7 +176,7 @@ class GliderData:
             return ax
 
     @staticmethod
-    def read_from_netcdf(input_path:str, use_qc_flags=[1, 2]) -> tuple:
+    def read_from_netcdf(input_path:str, use_qc_flags=[1, 2]):
         # IMOS standard quality control flags:
         # 0: no qc performed
         # 1: good data
