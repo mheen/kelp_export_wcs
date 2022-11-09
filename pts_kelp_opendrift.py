@@ -5,6 +5,11 @@ from datetime import datetime, timedelta
 import os
 import numpy as np
 
+import sys
+sys.path.append('..')
+from py_tools.files import get_dir_from_json
+from py_tools import log
+
 # TEMP: old release locations
 # lon_release = [115.71, 115.68]
 # lat_release = [-31.87, -31.77]
@@ -43,8 +48,10 @@ def run(release_times:np.ndarray,
     
     run_duration = timedelta(days=run_duration)
 
-    input_files = f'/mnt/qnap/OPERATIONAL/ROMS/CWA/archive/{year}/perth_his_*.nc'
-    output_file = f'opendrift_output/perth_{year}-{month}_{file_description}.nc'
+    input_dir = get_dir_from_json('input/dirs.json', 'roms_data')
+    input_files = f'{input_dir}{year}/perth_his_*.nc'
+    output_dir = get_dir_from_json('input/dirs.json', 'opendrift')
+    output_file = f'{output_dir}perth_{year}-{month}_{file_description}.nc'
 
     roms_reader = reader_ROMS_native.Reader(filename=input_files)
     
@@ -74,5 +81,6 @@ if __name__ == '__main__':
         for year in years:
             for month in months:
                 times0 = get_hourly_release_times(year, month)
-                print(f'Running simulation for depth {max_depths[d]}, {year}-{month}')
+
+                log.info(f'Running simulation for depth {max_depths[d]}, {year}-{month}')
                 run(times0, lon0, lat0, file_description)
