@@ -44,7 +44,8 @@ def run(release_times:np.ndarray,
         lon_release:np.ndarray,
         lat_release:np.ndarray,
         file_description:str,
-        run_duration=90, dt=300):
+        run_duration=90,
+        dt=300, dt_out=3600):
     
     run_duration = timedelta(days=run_duration)
 
@@ -62,11 +63,14 @@ def run(release_times:np.ndarray,
         o.seed_elements(lon=lon_release, lat=lat_release, time=release_time, z='seafloor')
 
     o.set_config('drift:advection_scheme', 'runge-kutta4')
+    o.set_config('drift:vertical_advection', False) # turn on when considering particle properties
     o.set_config('drift:vertical_mixing', False) # consider adding: could be relevant
     o.set_config('drift:horizontal_diffusivity', 1) # [m2/s]
+    o.set_config('general:use_auto_landmask', False) # (uses landmask from ROMS)
     o.set_config('general:coastline_action', 'stranding') # consider changing
 
-    o.run(duration=run_duration, time_step=dt, outfile=output_file)
+    o.run(duration=run_duration, time_step=dt, time_step_output=dt_out,
+          export_variables=['z'], outfile=output_file)
 
 if __name__ == '__main__':
     years = [2022]
