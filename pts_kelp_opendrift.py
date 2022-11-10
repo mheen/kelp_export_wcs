@@ -32,7 +32,7 @@ def get_lon_lat_release_roms_depth(min_depth:float, max_depth:float) -> tuple:
 def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np.ndarray:
     start_date = datetime(year, month, 1)
     n_days = (datetime(year, month+n_months, 1)-start_date).days
-    n_hours = n_days*24/n_hours-n_hours
+    n_hours = int(n_days*24/n_hours-n_hours)
 
     release_times = []
     for i in range(n_hours):
@@ -52,7 +52,7 @@ def run(release_times:np.ndarray,
     input_dir = get_dir_from_json('input/dirs.json', 'roms_data')
     input_files = f'{input_dir}{year}/perth_his_*.nc'
     output_dir = get_dir_from_json('input/dirs.json', 'opendrift')
-    output_file = f'{output_dir}perth_{year}-{month}_{file_description}.nc'
+    output_file = f'{output_dir}{year}/perth_{year}-{month}_{file_description}.nc'
 
     roms_reader = reader_ROMS_native.Reader(filename=input_files)
     
