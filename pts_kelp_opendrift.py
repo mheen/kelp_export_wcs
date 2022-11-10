@@ -1,6 +1,7 @@
 from opendrift.readers import reader_ROMS_native
 from models.opendrift_bottomdrifters import BottomDrifters
 from bathymetry_data import BathymetryData
+from kelp_map import get_kelp_coordinates
 from datetime import datetime, timedelta
 import os
 import numpy as np
@@ -29,6 +30,12 @@ def get_lon_lat_release_roms_depth(min_depth:float, max_depth:float) -> tuple:
     lat0 = bathymetry.lat[l_depth]
     return lon0, lat0
 
+def get_lon_lat_release_kelp_locations(probability_threshold=0.8, i_thin=10):
+    lon, lat = get_kelp_coordinates()
+    lon0 = lon[::i_thin]
+    lat0 = lat[::i_thin]
+    return lon0, lat0
+
 def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np.ndarray:
     start_date = datetime(year, month, 1)
     n_days = (datetime(year, month+n_months, 1)-start_date).days
@@ -52,7 +59,8 @@ def run(release_times:np.ndarray,
     input_dir = get_dir_from_json('input/dirs.json', 'roms_data')
     input_files = f'{input_dir}{year}/perth_his_*.nc'
     output_dir = get_dir_from_json('input/dirs.json', 'opendrift')
-    output_file = f'{output_dir}{year}/perth_{year}-{month}_{file_description}.nc'
+    output_file = f'{output_dir}perth_{file_description}.nc'
+    log.info(f'Simulation output will be saved to: {output_file}')
 
     roms_reader = reader_ROMS_native.Reader(filename=input_files)
     
@@ -72,19 +80,16 @@ def run(release_times:np.ndarray,
     o.run(duration=run_duration, time_step=dt, time_step_output=dt_out,
           export_variables=['z'], outfile=output_file)
 
+    log.info(f'Simulated done, saved to: {output_file}')
+
 if __name__ == '__main__':
     years = [2022]
-    months = [4, 5, 6, 7]
-    min_depths = [5, 10, 20, 30, 40]
-    max_depths = [10, 20, 30, 40, 50]
+    
+    lon0, lat0 = get_lon_lat_release_kelp_locations()
 
-    for d in range(len(min_depths)):
-        lon0, lat0 = get_lon_lat_release_roms_depth(min_depths[d], max_depths[d])
-        file_description = f'{max_depths[d]}m'
+    for year in years:
+        file_description = f'{year}'
 
-        for year in years:
-            for month in months:
-                times0 = get_n_hourly_release_times(year, month)
+        times0 = get_n_hourly_release_times(year, 4, n_months=4, n_hours=24)
 
-                log.info(f'Running simulation for depth {max_depths[d]}, {year}-{month}')
-                run(times0, lon0, lat0, file_description)
+        run(times0, lon0, lat0, file_description, dt=60*10)
