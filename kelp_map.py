@@ -6,7 +6,7 @@ def get_kelp_coordinates(probability_threshold=0.8,
     dataset = rasterio.open(input_path)
 
     prob = dataset.read()[0] # read all data from first band
-    i_kelp = np.where(prob>=0.8)
+    i_kelp = np.where(prob>=probability_threshold)
 
     lon, lat = rasterio.transform.xy(dataset.transform, i_kelp[0], i_kelp[1], offset='center')
 

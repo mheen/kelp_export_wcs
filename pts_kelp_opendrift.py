@@ -31,7 +31,7 @@ def get_lon_lat_release_roms_depth(min_depth:float, max_depth:float) -> tuple:
     return lon0, lat0
 
 def get_lon_lat_release_kelp_locations(probability_threshold=0.8, i_thin=10):
-    lon, lat = get_kelp_coordinates()
+    lon, lat = get_kelp_coordinates(probability_threshold=probability_threshold)
     lon0 = lon[::i_thin]
     lat0 = lat[::i_thin]
     return lon0, lat0
@@ -44,6 +44,16 @@ def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np
     release_times = []
     for i in range(n_hours):
         release_times.append(start_date+timedelta(hours=i))
+
+    return np.array(release_times)
+
+def get_n_daily_release_times(year:int, month:int, n_months=4, n_days=1) -> np.ndarray:
+    start_date = datetime(year, month, 1)
+    n_days = (datetime(year, month+n_months, 1)-start_date).days
+
+    release_times = []
+    for i in range(n_days):
+        release_times.append(start_date+timedelta(days=i))
 
     return np.array(release_times)
 
@@ -85,14 +95,15 @@ def run(release_times:np.ndarray,
 if __name__ == '__main__':
     years = [2022]
     start_month = 4
-    n_release_months = 4
-    run_duration = (datetime(2022, 9, 31)-datetime(2022, 4, 1)).days
+    run_months = 2
     
     lon0, lat0 = get_lon_lat_release_kelp_locations()
 
     for year in years:
+        run_duration = (datetime(year, start_month+run_months, 1)-datetime(year, start_month, 1)).days
+
         file_description = f'{year}'
 
-        times0 = get_n_hourly_release_times(year, start_month, n_months=n_release_months, n_hours=24)
+        times0 = get_n_daily_release_times(year, start_month)
 
         run(times0, lon0, lat0, file_description, dt=60*10, run_duration=run_duration)
