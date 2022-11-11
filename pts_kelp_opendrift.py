@@ -84,12 +84,15 @@ def run(release_times:np.ndarray,
 
 if __name__ == '__main__':
     years = [2022]
+    start_month = 4
+    n_release_months = 4
+    run_duration = (datetime(2022, 9, 31)-datetime(2022, 4, 1)).days
     
     lon0, lat0 = get_lon_lat_release_kelp_locations()
 
     for year in years:
         file_description = f'{year}'
 
-        times0 = get_n_hourly_release_times(year, 4, n_months=4, n_hours=24)
+        times0 = get_n_hourly_release_times(year, start_month, n_months=n_release_months, n_hours=24)
 
-        run(times0, lon0, lat0, file_description, dt=60*10)
+        run(times0, lon0, lat0, file_description, dt=60*10, run_duration=run_duration)
