@@ -2,6 +2,8 @@ input/dirs.json
 *.nc
 test*
 
+.vscode/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
