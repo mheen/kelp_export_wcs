@@ -1,4 +1,4 @@
-from opendrift.readers import reader_ROMS_native
+from readers import reader_ROMS
 from models.opendrift_bottomdrifters import BottomDrifters
 from bathymetry_data import BathymetryData
 from kelp_map import get_kelp_coordinates
@@ -48,8 +48,8 @@ def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np
     return np.array(release_times)
 
 def get_n_daily_release_times(year:int, month:int, n_months=4, n_days=1) -> np.ndarray:
-    start_date = datetime(year, month, 1)
-    n_days = (datetime(year, month+n_months, 1)-start_date).days
+    start_date = datetime(year, month, 20)
+    n_days = (datetime(year, month+n_months, 20)-start_date).days
 
     release_times = []
     for i in range(n_days):
@@ -64,6 +64,10 @@ def run(release_times:np.ndarray,
         run_duration=60,
         dt=300, dt_out=3600):
     
+    export_variables = ['z', 'age_seconds', 'origin_marker',
+                        'terminal_velocity', 'x_sea_water_velocity', 'y_sea_water_velocity',
+                        'sea_floor_depth_below_sea_level', 'sea_water_temperature', 'sea_water_salinity']
+
     run_duration = timedelta(days=run_duration)
 
     input_dir = get_dir_from_json('input/dirs.json', 'roms_data')
@@ -72,7 +76,7 @@ def run(release_times:np.ndarray,
     output_file = f'{output_dir}perth_{file_description}.nc'
     log.info(f'Simulation output will be saved to: {output_file}')
 
-    roms_reader = reader_ROMS_native.Reader(filename=input_files)
+    roms_reader = reader_ROMS.Reader(filename=input_files)
     
     o = BottomDrifters(loglevel=20)
     o.add_reader(roms_reader)
@@ -88,16 +92,18 @@ def run(release_times:np.ndarray,
     o.set_config('general:coastline_action', 'stranding') # consider changing
 
     o.run(duration=run_duration, time_step=dt, time_step_output=dt_out,
-          export_variables=['z'], outfile=output_file)
+          export_variables=export_variables, outfile=output_file)
 
-    log.info(f'Simulated done, saved to: {output_file}')
+    log.info(f'Simulation done, saved to: {output_file}')
+
+    return o
 
 if __name__ == '__main__':
-    years = [2022]
+    years = [2017]
     start_month = 4
-    run_months = 2
+    run_months = 5
     
-    lon0, lat0 = get_lon_lat_release_kelp_locations()
+    lon0, lat0 = get_lon_lat_release_kelp_locations(i_thin=100)
 
     for year in years:
         run_duration = (datetime(year, start_month+run_months, 1)-datetime(year, start_month, 1)).days
@@ -106,4 +112,6 @@ if __name__ == '__main__':
 
         times0 = get_n_daily_release_times(year, start_month)
 
-        run(times0, lon0, lat0, file_description, dt=60*10, run_duration=run_duration)
+        o = run(times0, lon0, lat0, file_description, dt=60*10, run_duration=run_duration)
+        o.plot(linecolor='z', filename=f'{get_dir_from_json("input/dirs.json", "plots")}z_{year}.jpg')
+        o.animation(filename=f'{get_dir_from_json("input/dirs.json", "plots")}animation_{year}.gif')
