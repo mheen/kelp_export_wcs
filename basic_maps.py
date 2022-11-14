@@ -1,11 +1,10 @@
-from roms_data import RomsGrid
 import cartopy.crs as ccrs
 import cartopy.mpl.ticker as cticker
 from cartopy.io import shapereader
 import matplotlib.pyplot as plt
 
-perth_grid = RomsGrid.read_from_netcdf()
-lon_range_perth, lat_range_perth = perth_grid.get_lon_lat_range()
+lon_range_perth = [115.25242441860465, 115.87307558139534]
+lat_range_perth = [-32.64677503054363, -31.49135331655606]
 perth_meridians = [115.3, 115.7]
 perth_parallels = [-32.4, -32.0, -31.6]
 
