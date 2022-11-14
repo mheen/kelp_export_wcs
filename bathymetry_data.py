@@ -1,10 +1,8 @@
+from basic_maps import perth_map
 from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
 import cartopy.crs as ccrs
-import cartopy.mpl.ticker as cticker
-from cartopy.io import shapereader
-import cartopy.feature as cftr
 import matplotlib.pyplot as plt
 
 import sys
@@ -21,14 +19,8 @@ class BathymetryData:
     def plot_contours(self, ax=None, show=True) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            shp = shapereader.Reader('input/GSHHS_coastline_GSR.shp')
-            for record, geometry in zip(shp.records(), shp.geometries()):
-                ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='lightgray',
-                                edgecolor='black')
-            ax.set_extent([np.nanmin(self.lon), np.nanmax(self.lon),
-                           np.nanmin(self.lat), np.nanmax(self.lat)],
-                           ccrs.PlateCarree())
-
+            ax = perth_map(ax)
+            
         def _fmt(x):
             s = f'{x:.0f}'
             return s

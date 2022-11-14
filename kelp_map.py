@@ -1,9 +1,7 @@
+from basic_maps import perth_map
 import rasterio
 import numpy as np
 import cartopy.crs as ccrs
-import cartopy.mpl.ticker as cticker
-from cartopy.io import shapereader
-import cartopy.feature as cftr
 import matplotlib.pyplot as plt
 
 import sys
@@ -21,13 +19,7 @@ class KelpProbability:
     def plot(self, ax=None, show=True) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            shp = shapereader.Reader('input/GSHHS_coastline_GSR.shp')
-            for record, geometry in zip(shp.records(), shp.geometries()):
-                ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='lightgray',
-                                edgecolor='black')
-            ax.set_extent([np.nanmin(self.lon), np.nanmax(self.lon),
-                           np.nanmin(self.lat), np.nanmax(self.lat)],
-                           ccrs.PlateCarree())
+            ax = perth_map(ax)
 
         c = ax.pcolormesh(self.lon, self.lat, self.prob, cmap='Greens')
         cbar = plt.colorbar(c)

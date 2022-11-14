@@ -1,13 +1,10 @@
-from multiprocessing.sharedctypes import Value
 from seawater_density import calculate_density
 from gridfit import gridfit
 from ext.peak_detect import peak_detect
+from basic_maps import perth_map
 from netCDF4 import Dataset
 import numpy as np
 import cartopy.crs as ccrs
-import cartopy.mpl.ticker as cticker
-from cartopy.io import shapereader
-import cartopy.feature as cftr
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from scipy import interpolate
@@ -130,7 +127,6 @@ class GliderData:
         ax.set_xlim([0, self.cumtime[-1]])
         ax.set_ylim([z[0], 0])
 
-
         if show is True:
             plt.show()
         else:
@@ -139,13 +135,7 @@ class GliderData:
     def plot_track(self, ax=None, show=True, show_labels=True):
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            shp = shapereader.Reader('input/GSHHS_coastline_GSR.shp')
-            for record, geometry in zip(shp.records(), shp.geometries()):
-                ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='lightgray',
-                                edgecolor='black')
-            ax.set_extent([np.floor(np.nanmin(self.lon)), np.ceil(np.nanmax(self.lon)),
-                           np.floor(np.nanmin(self.lat)), np.ceil(np.nanmax(self.lat))],
-                           ccrs.PlateCarree())
+            ax = perth_map(ax)
         
         l_nonans_position = np.logical_and(~np.isnan(self.lon), ~np.isnan(self.lat))
         ax.plot(self.lon[l_nonans_position][0], self.lat[l_nonans_position][0],
