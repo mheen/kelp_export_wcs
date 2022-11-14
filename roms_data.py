@@ -1,10 +1,15 @@
+from basic_maps import perth_map
 from matplotlib import path
 import numpy as np
 from netCDF4 import Dataset
+import cartopy.crs as ccrs
+import matplotlib.pyplot as plt
 
 import sys
 sys.path.append('..')
+from py_tools.files import get_dir_from_json
 from py_tools.timeseries import convert_time_to_datetime, get_l_time_range
+from py_tools import log
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     
@@ -86,6 +91,31 @@ class RomsData:
         self.salt = salt # [time, s, eta, xi]
         self.h = h # [eta, xi]
 
+    def plot_map(self, parameter:str, t:int, s:int,
+                 cmap='RdBu_r', clabel='', vmin=None, vmax=None,
+                 ax=None, show=True) -> plt.axes:
+        if ax is None:
+            ax = plt.axes(projection=ccrs.PlateCarree())
+            ax = perth_map(ax)
+
+        if hasattr(self, parameter):
+            values = getattr(self, parameter)
+            if len(values.shape) == 4:
+                values = values[t, s, :, :] # [time, s, eta, xi]
+            else:
+                raise ValueError(f'Map plotting currently only works for 4D variables')
+        else:
+            raise ValueError(f'Unknown parameter {parameter} in RomsData')
+
+        c = ax.pcolormesh(self.grid.lon, self.grid.lat, values, cmap=cmap, vmin=vmin, vmax=vmax)
+        cbar = plt.colorbar(c)
+        cbar.set_label(clabel)
+
+        if show is True:
+            plt.show()
+        else:
+            return ax
+
     @staticmethod
     def convert_roms_u_v_to_u_east_v_north(u:np.ndarray, v:np.ndarray, angle:np.ndarray) -> tuple:
         '''Convert u and v from curvilinear ROMS output to u eastwards and v northwards.
@@ -130,7 +160,6 @@ class RomsData:
 
         return u_east, v_north
 
-
     @staticmethod
     def read_from_netcdf(input_path:str, lon_range=None, lat_range=None, time_range=None):
         
@@ -163,11 +192,11 @@ class RomsData:
 
         h = netcdf['h'][j0:j1, i0:i1].filled(fill_value=np.nan)
 
-        temp = netcdf['temp'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan)
-        salt = netcdf['salt'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan)
+        temp = netcdf['temp'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
+        salt = netcdf['salt'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
 
-        u = netcdf['u'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan)
-        v = netcdf['v'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan)
+        u = netcdf['u'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
+        v = netcdf['v'][:, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
 
         netcdf.close()
 
@@ -176,4 +205,6 @@ class RomsData:
         return RomsData(time, sub_grid, u_east, v_north, temp, salt, h)
 
 if __name__ == '__main__':
-    grid = RomsGrid.read_from_netcdf()
+    input_path = f'{get_dir_from_json("input/dirs.json", "roms_data")}2022/perth_his_20220701.nc'
+    romsdata = RomsData.read_from_netcdf(input_path)
+    romsdata.plot_map('temp', 0, 0, clabel='Temperature ($^o$C)', vmin=18, vmax=22)
