@@ -9,6 +9,7 @@ import numpy as np
 import sys
 sys.path.append('..')
 from py_tools.files import get_dir_from_json
+from py_tools.timeseries import add_month_to_time
 from py_tools import log
 
 # TEMP: old release locations
@@ -36,9 +37,10 @@ def get_lon_lat_release_kelp_locations(probability_threshold=0.8, i_thin=10):
     lat0 = lat[::i_thin]
     return lon0, lat0
 
-def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np.ndarray:
-    start_date = datetime(year, month, 1)
-    n_days = (datetime(year, month+n_months, 1)-start_date).days
+def get_n_hourly_release_times(year:int, month:int, day:int, n_months=1, n_hours=3) -> np.ndarray:
+    start_date = datetime(year, month, day)
+    end_date = add_month_to_time(start_date, n_months)
+    n_days = (end_date-start_date).days
     n_hours = int(n_days*24/n_hours-n_hours)
 
     release_times = []
@@ -47,9 +49,10 @@ def get_n_hourly_release_times(year:int, month:int, n_months=1, n_hours=3) -> np
 
     return np.array(release_times)
 
-def get_n_daily_release_times(year:int, month:int, n_months=4, n_days=1) -> np.ndarray:
-    start_date = datetime(year, month, 20)
-    n_days = (datetime(year, month+n_months, 20)-start_date).days
+def get_n_daily_release_times(year:int, month:int, day:int, n_months=4, n_days=1) -> np.ndarray:
+    start_date = datetime(year, month, day)
+    end_date = add_month_to_time(start_date, n_months)
+    n_days = (end_date-start_date).days
 
     release_times = []
     for i in range(n_days):
@@ -71,7 +74,7 @@ def run(release_times:np.ndarray,
     run_duration = timedelta(days=run_duration)
 
     input_dir = get_dir_from_json('input/dirs.json', 'roms_data')
-    input_files = f'{input_dir}{year}/perth_his_*.nc'
+    input_files = f'{input_dir}{release_times[0].year}/perth_his_*.nc'
     output_dir = get_dir_from_json('input/dirs.json', 'opendrift')
     output_file = f'{output_dir}perth_{file_description}.nc'
     log.info(f'Simulation output will be saved to: {output_file}')
@@ -100,22 +103,45 @@ def run(release_times:np.ndarray,
 
     return o
 
-if __name__ == '__main__':
-    years = [2017]
-    start_month = 4
-    run_months = 5
-    
-    lon0, lat0 = get_lon_lat_release_kelp_locations(i_thin=100)
+def run_multiple_releases(year:int, start_month:int, start_day:int,
+                          run_months:int, release_months:int, i_thin=100,
+                          dt=60*10):
+    lon0, lat0 = get_lon_lat_release_kelp_locations(i_thin=i_thin)
     print(f'lon0={lon0}\nlat0={lat0}')
     sys.stdout.flush()
 
-    for year in years:
-        run_duration = (datetime(year, start_month+run_months, 1)-datetime(year, start_month, 1)).days
+    times0 = get_n_daily_release_times(year, start_month, start_day, n_months=release_months)
+    print(f'times0={times0}')
+    sys.stdout.flush()
 
-        file_description = f'{year}'
+    start_date = datetime(year, start_month, start_day)
+    end_date = add_month_to_time(start_date, run_months)
+    run_duration = (end_date-start_date).days
 
-        times0 = get_n_daily_release_times(year, start_month)
+    file_description = f'{year}-{start_date.strftime("%b")}-{end_date.strftime("%b")}'
 
-        o = run(times0, lon0, lat0, file_description, dt=60*10, run_duration=run_duration)
-        o.plot(linecolor='z', filename=f'{get_dir_from_json("input/dirs.json", "plots")}z_{year}.jpg')
-        o.animation(filename=f'{get_dir_from_json("input/dirs.json", "plots")}animation_{year}.gif')
+    log.info(f'Running simulation for: {year} {start_date.strftime("%b")} to {end_date.strftime("%b")}...')
+    _ = run(times0, lon0, lat0, file_description, run_duration=run_duration, dt=dt)
+
+def run_single_event(start_date:datetime, end_date:datetime,
+                     i_thin=10, dt=60*10):
+    lon0, lat0 = get_lon_lat_release_kelp_locations(i_thin=i_thin)
+    print(f'lon0={lon0}\nlat0={lat0}')
+    sys.stdout.flush()
+
+    times0 = [start_date]
+    print(f'times0={times0}')
+    sys.stdout.flush()
+
+    run_duration = (end_date-start_date).days
+
+    file_description = f'event-{start_date.strftime("%Y-%m-%d")}-{end_date.strftime("%Y-%m-%d")}'
+
+    log.info(f'Running simulation for event: {start_date.strftime("%Y-%m-%d")}')
+    _ = run(times0, lon0, lat0, file_description, run_duration=run_duration, dt=dt)
+
+if __name__ == '__main__':
+    
+    # run_multiple_releases(2017, 4, 1, 5, 4)
+
+    run_single_event(datetime(2022, 6, 28), datetime(2022, 7, 5))
