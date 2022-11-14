@@ -77,6 +77,8 @@ def run(release_times:np.ndarray,
     log.info(f'Simulation output will be saved to: {output_file}')
 
     roms_reader = reader_ROMS.Reader(filename=input_files)
+    print(roms_reader)
+    sys.stdout.flush()
     
     o = BottomDrifters(loglevel=20)
     o.add_reader(roms_reader)
@@ -88,7 +90,7 @@ def run(release_times:np.ndarray,
     o.set_config('drift:vertical_advection', False) # turn on when considering particle properties
     o.set_config('drift:vertical_mixing', False) # consider adding: could be relevant
     o.set_config('drift:horizontal_diffusivity', 1) # [m2/s]
-    # o.set_config('general:use_auto_landmask', False) # (uses landmask from ROMS) -> turned off: not working (?)
+    o.set_config('general:use_auto_landmask', False) # (uses landmask from ROMS) -> turned off: not working (?)
     o.set_config('general:coastline_action', 'stranding') # consider changing
 
     o.run(duration=run_duration, time_step=dt, time_step_output=dt_out,
@@ -104,6 +106,8 @@ if __name__ == '__main__':
     run_months = 5
     
     lon0, lat0 = get_lon_lat_release_kelp_locations(i_thin=100)
+    print(f'lon0={lon0}\nlat0={lat0}')
+    sys.stdout.flush()
 
     for year in years:
         run_duration = (datetime(year, start_month+run_months, 1)-datetime(year, start_month, 1)).days
