@@ -104,12 +104,26 @@ class RomsData:
                 values = values[t, s, :, :] # [time, s, eta, xi]
             else:
                 raise ValueError(f'Map plotting currently only works for 4D variables')
+        elif parameter == 'velocity':
+            u = self.u[t, s, :, :]
+            v = self.v[t, s, :, :]
+            values = np.sqrt(u**2+v**2)
         else:
             raise ValueError(f'Unknown parameter {parameter} in RomsData')
 
-        c = ax.pcolormesh(self.grid.lon, self.grid.lat, values, cmap=cmap, vmin=vmin, vmax=vmax)
+        c = ax.pcolormesh(self.grid.lon, self.grid.lat, values, cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
         cbar = plt.colorbar(c)
         cbar.set_label(clabel)
+
+        if parameter == 'velocity':
+            thin = 5
+            i = np.arange(0, u.shape[0], thin)
+            j = np.arange(0, u.shape[1], thin)
+            u_q = u[i][:, j]
+            v_q = v[i][:, j]
+            lon_q = self.grid.lon[i][:, j]
+            lat_q = self.grid.lat[i][:, j]
+            ax.quiver(lon_q, lat_q, u_q, v_q, scale=10, transform=ccrs.PlateCarree())
 
         if show is True:
             plt.show()
