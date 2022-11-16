@@ -67,7 +67,16 @@ class Particles:
         lat = self.lat[l_depth, :]
         z = self.z[l_depth, :]
 
-        return Particles(self.time, status, lon, lat, z)
+        h = self.h[l_depth, :]
+        u = self.u[l_depth, :]
+        v = self.v[l_depth, :]
+        salt = self.salt[l_depth, :]
+        temp = self.temp[l_depth, :]
+
+        age = self.age[l_depth, :]
+        origin_marker = self.origin_marker[l_depth, :]
+
+        return Particles(self.time, status, lon, lat, z, h, u, v, salt, temp, age, origin_marker)
 
     def filter_based_on_release_lon_lat_range(self, lon_range:list, lat_range:list):
         l_lon_range = np.logical_and(self.lon0>=lon_range[0], self.lon0<=lon_range[1])
@@ -79,7 +88,16 @@ class Particles:
         lat = self.lat[l_range, :]
         z = self.z[l_range, :]
 
-        return Particles(self.time, status, lon, lat, z)
+        h = self.h[l_range, :]
+        u = self.u[l_range, :]
+        v = self.v[l_range, :]
+        salt = self.salt[l_range, :]
+        temp = self.temp[l_range, :]
+
+        age = self.age[l_range, :]
+        origin_marker = self.origin_marker[l_range, :]
+
+        return Particles(self.time, status, lon, lat, z, h, u, v, salt, temp, age, origin_marker)
 
     def get_l_deep_sea(self, h_deep_sea:float) -> np.ndarray:
         i_ds, j_ds = np.where(self.z <= -h_deep_sea)
