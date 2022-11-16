@@ -16,7 +16,7 @@ class BathymetryData:
         self.lat = lat
         self.h = h
 
-    def plot_contours(self, ax=None, show=True) -> plt.axes:
+    def plot_contours(self, ax=None, show=True, color='k') -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
             ax = perth_map(ax)
@@ -26,7 +26,7 @@ class BathymetryData:
             return s
 
         cs = ax.contour(self.lon, self.lat, self.h, levels=[10, 25, 50, 100, 150, 200],
-                        colors='k', linewidths=1, transform=ccrs.PlateCarree())
+                        colors=color, linewidths=1, transform=ccrs.PlateCarree())
         ax.clabel(cs, cs.levels, fontsize=8, inline=True, fmt=_fmt)
 
         if show is True:

@@ -114,6 +114,7 @@ class GliderData:
         t, z, transect_values = self.get_transect_data(values)
 
         if ax is None:
+            fig = plt.figure(figsize=(8, 3))
             ax = plt.axes()
 
         tt, zz = np.meshgrid(t, z)
@@ -127,12 +128,16 @@ class GliderData:
         ax.set_xlim([0, self.cumtime[-1]])
         ax.set_ylim([z[0], 0])
 
+        ax.set_ylabel('Depth (m)')
+        ax.set_xticklabels([])
+        ax.set_xlabel('Distance along transect')
+
         if show is True:
             plt.show()
         else:
             return ax
 
-    def plot_track(self, ax=None, show=True, show_labels=True):
+    def plot_track(self, ax=None, show=True, show_labels=True, color='k'):
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
             ax = perth_map(ax)
@@ -144,7 +149,7 @@ class GliderData:
         ax.plot(self.lon[l_nonans_position][-1], self.lat[l_nonans_position][-1],
                 'xr', markersize=5, label='Final location',
                 transform=ccrs.PlateCarree(), zorder=6)
-        ax.plot(self.lon, self.lat, '.k', transform=ccrs.PlateCarree())
+        ax.plot(self.lon, self.lat, '.', color=color, transform=ccrs.PlateCarree())
         
         if show_labels is True:
             # label locations with date
