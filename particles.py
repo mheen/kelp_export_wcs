@@ -215,7 +215,7 @@ class Particles:
         else:
             return ax
 
-    def plot_age_in_deep_sea(self, h_deep_sea:float,
+    def plot_age_in_deep_sea(self, h_deep_sea:float, total_particles=None,
                              linestyle='-', color='k', label='',
                              ax=None, show=True, output_path=None) -> plt.axes:
         if ax is None:
@@ -233,7 +233,9 @@ class Particles:
         else:
             raise ValueError(f'You should not be able to get here: matrix_arriving_ds is {n_dim_matrix}D')
 
-        f_deep_sea_per_age = n_deep_sea_per_age/self.lon.shape[0] # divided by total # particles
+        if total_particles is None:
+            total_particles = self.lon.shape[0]
+        f_deep_sea_per_age = n_deep_sea_per_age/total_particles # divided by total # particles
 
         ax.plot(age_arriving_ds, f_deep_sea_per_age, linestyle, color=color, label=label)
 
@@ -246,7 +248,7 @@ class Particles:
         else:
             return ax
 
-    def plot_timeseries_in_deep_sea(self, h_deep_sea:float,
+    def plot_timeseries_in_deep_sea(self, h_deep_sea:float, total_particles=None,
                                     ax=None, show=True, output_path=None) -> plt.axes:
         if ax is None:
             fig = plt.figure(figsize=(10, 5))
@@ -264,7 +266,9 @@ class Particles:
         color_ax2='g'
         ax2 = ax.twinx()
         ax2.set_ylabel('Fraction in deep sea', color=color_ax2)
-        ax2.plot(self.time, n_deep_sea/self.lon.shape[0], '-', color=color_ax2)
+        if total_particles is None:
+            total_particles = self.lon.shape[0]
+        ax2.plot(self.time, n_deep_sea/total_particles, '-', color=color_ax2)
         ax2.tick_params(axis='y', labelcolor=color_ax2)
 
         if output_path is not None:
