@@ -16,14 +16,22 @@ class KelpProbability:
         self.lat = lat
         self.prob = probability
 
-    def plot(self, ax=None, show=True) -> plt.axes:
+    def plot(self, ax=None, show=True, output_path=None, probability_threshold=0.) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
             ax = perth_map(ax)
 
-        c = ax.pcolormesh(self.lon, self.lat, self.prob, cmap='Greens')
+        l_prob = self.prob >= probability_threshold
+        prob = np.copy(self.prob)
+        prob[~l_prob] = np.nan
+
+        c = ax.pcolormesh(self.lon, self.lat, prob, cmap='Greens')
         cbar = plt.colorbar(c)
         cbar.set_label('Probability of kelp')
+
+        if output_path:
+            log.info(f'Saving figure to: {output_path}')
+            plt.savefig(output_path, bbox_inches='tight', dpi=300)
 
         if show is True:
             plt.show()
@@ -48,6 +56,21 @@ class KelpProbability:
 
         return KelpProbability(lon, lat, prob)
 
+def generate_random_releases_based_on_probability(rng: np.random.default_rng, n_thin=25, input_path='input/perth_kelp_probability.tif') -> tuple:
+    log.info(f'''Getting kelp release locations based on probability
+             from probability map: {input_path}''')
+
+    kelp_prob = KelpProbability.read_from_tiff(input_path)
+    # random release depending on kelp probability
+    random_ints_prob = rng.integers(1, high=100, size=kelp_prob.prob.shape)
+    l_prob = random_ints_prob >= kelp_prob.prob
+    # randomly thin releases based on n_thin (to keep number of particles manageable)
+    random_ints = rng.integers(1, high=n_thin+1, size=kelp_prob.prob.shape)
+    l_thin = random_ints == n_thin
+    l_release = np.logical_and(l_prob, l_thin)
+
+    return kelp_prob.lon[l_release], kelp_prob.lat[l_release]
+
 def get_kelp_coordinates(probability_threshold=0.8,
                          input_path='input/perth_kelp_probability.tif') -> tuple:
     log.info(f'''Getting kelp coordinates using probability threshold {probability_threshold},
@@ -64,5 +87,3 @@ def get_kelp_coordinates(probability_threshold=0.8,
 
 if __name__ == '__main__':
     kelp_prob = KelpProbability.read_from_tiff()
-    kelp_prob.plot()
-    
