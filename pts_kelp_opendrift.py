@@ -61,9 +61,8 @@ def run(release_times:np.ndarray,
         run_duration=60,
         dt=300, dt_out=3600):
     
-    export_variables = ['z', 'age_seconds', 'origin_marker',
-                        'terminal_velocity', 'x_sea_water_velocity', 'y_sea_water_velocity',
-                        'sea_floor_depth_below_sea_level', 'sea_water_temperature', 'sea_water_salinity']
+    export_variables = ['z', 'age_seconds',
+                        'sea_water_temperature', 'sea_water_salinity']
 
     run_duration = timedelta(days=run_duration)
 
@@ -102,18 +101,21 @@ def run(release_times:np.ndarray,
     return o
 
 def run_multiple_releases(year:int, start_month:int, start_day:int,
-                          run_months:int, release_months:int, n_thin=10,
-                          dt=60*10):
+                          run_months:int, release_months:int, n_thin=25,
+                          dt=60*10, dt_out=3*60*60):
 
     rng = np.random.default_rng(42) # fix random seed to create random releases based on kelp probability
     times0 = get_n_daily_release_times(year, start_month, start_day, n_months=release_months)
     lons0 = []
     lats0 = []
+    n_particles = 0
     for t in times0:
         lon0, lat0 = generate_random_releases_based_on_probability(rng, n_thin=n_thin)
         lons0.append(lon0)
         lats0.append(lat0)
+        n_particles += len(lon0)
 
+    log.info(f'Releasing {n_particles} in total spread over times:')
     print(f'times0={times0}')
     sys.stdout.flush()
 
@@ -124,7 +126,7 @@ def run_multiple_releases(year:int, start_month:int, start_day:int,
     file_description = f'{year}-{start_date.strftime("%b")}-{end_date.strftime("%b")}'
 
     log.info(f'Running simulation for: {year} {start_date.strftime("%b")} to {end_date.strftime("%b")}...')
-    _ = run(times0, lons0, lats0, file_description, run_duration=run_duration, dt=dt)
+    _ = run(times0, lons0, lats0, file_description, run_duration=run_duration, dt=dt, dt_out=dt_out)
 
 def run_single_event(start_date:datetime, end_date:datetime,
                      n_thin=10, dt=60*10):
@@ -146,6 +148,6 @@ def run_single_event(start_date:datetime, end_date:datetime,
 
 if __name__ == '__main__':
     
-    run_multiple_releases(2017, 4, 1, 5, 4)
+    run_multiple_releases(2017, 3, 1, 5, 4)
 
     # run_single_event(datetime(2022, 6, 28), datetime(2022, 7, 5))
