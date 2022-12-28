@@ -21,5 +21,5 @@ def get_location_info(location:str) -> LocationInfo:
     for loc in all_locations:
         if loc.name == location:
             return loc
-        raise ValueError(f'Unknown location requested')
+    raise ValueError(f'Unknown location requested')
     pass
