@@ -38,7 +38,7 @@ def plot_basic_map(ax:plt.axes, location_info:LocationInfo, xmarkers='bottom', y
     ax = add_grid(ax, location_info.meridians, location_info.parallels, xmarkers, ymarkers, draw_grid)
 
     ax.set_extent([location_info.lon_range[0], location_info.lon_range[1],
-                   location_info.lat_range[0], location_info.lat_range[1],
-                   ccrs.PlateCarree()])
+                   location_info.lat_range[0], location_info.lat_range[1]],
+                   ccrs.PlateCarree())
     
     return ax
