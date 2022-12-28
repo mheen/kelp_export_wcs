@@ -1,15 +1,12 @@
-from location_info import LocationInfo
-from basic_maps import plot_basic_map
 from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
 from netCDF4 import Dataset
-import cartopy.crs as ccrs
-import matplotlib.pyplot as plt
+from datetime import datetime
 
 import sys
 sys.path.append('..')
-from py_tools.files import get_dir_from_json
+from py_tools.files import get_dir_from_json, get_daily_files_in_time_range
 from py_tools.timeseries import convert_time_to_datetime, get_l_time_range
 from py_tools import log
 
@@ -49,7 +46,7 @@ def get_z(s:np.ndarray, h:np.ndarray, cs_r:np.ndarray, hc:np.ndarray) -> np.ndar
     n = hc*s[:, None] + np.outer(cs_r, h)
     d = (1.0 + hc/h)
 
-    z = n.reshape(output_shape)/D
+    z = n.reshape(output_shape)/d
 
     return z
 
@@ -158,17 +155,17 @@ class RomsData:
     temp: np.ndarray
     salt: np.ndarray
 
-def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
+def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
     grid = read_roms_grid_from_netcdf(input_path)
 
     if lon_range and lat_range is not None:
         i0, i1, j0, j1 = bbox2ij(grid.lon, grid.lat, [lon_range[0], lon_range[1], lat_range[0], lat_range[1]])
         grid = get_subgrid(grid, lon_range, lat_range)
     else:
-        i0 = 0
-        i1 = -1
-        j0 = 0
-        j1 = -1
+        i0 = None
+        i1 = None
+        j0 = None
+        j1 = None
 
     nc = Dataset(input_path)
 
@@ -176,14 +173,14 @@ def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, 
     time_units = nc['ocean_time'].units
     time = convert_time_to_datetime(time_org, time_units)
 
+    t0 = None
+    t1 = None
     if time_range is not None:
         l_time = get_l_time_range(time, time_range[0], time_range[1])
         i_time = np.where(l_time)[0]
-        t0 = i_time[0]
-        t1 = i_time[-1]
-    else:
-        t0 = 0
-        t1 = -1
+        if len(i_time) != 0:
+            t0 = i_time[0]
+            t1 = i_time[-1]+1
 
     time = time[t0:t1]
 
@@ -197,43 +194,31 @@ def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, 
 
     u_east, v_north = convert_roms_u_v_to_u_east_v_north(u, v, grid.angle)
 
+    return time, grid, u_east, v_north, temp, salt
+
+def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
+    time, grid, u_east, v_north, temp, salt = _get_roms_data_from_netcdf(input_path, lon_range, lat_range, time_range)
+
     return RomsData(time, grid, u_east, v_north, temp, salt)
 
-def plot_map_roms_data(roms_data:RomsData, location_info:LocationInfo, parameter:str, t:int, s:int,
-                       ax=None, show=True,
-                       cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
-    if ax is None:
-        ax = plt.axes(projection=ccrs.PlateCarree())
-        ax = plot_basic_map(ax, location_info)
+def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end_time:datetime,
+                                         lon_range=None, lat_range=None) -> RomsData:
+    time_range = [start_time, end_time]
 
-    if hasattr(roms_data, parameter):
-        values = getattr(roms_data, parameter)
-        if len(values.shape) == 4:
-            values = values[t, s, :, :] # [time, s, eta, xi]
-        else:
-            raise ValueError(f'Map plotting currently only works for 4D variables')
-    elif parameter == 'velocity':
-        u = roms_data.u[t, s, :, :]
-        v = roms_data.v[t, s, :, :]
-        values = np.sqrt(u**2+v**2)
-    else:
-        raise ValueError(f'Unknown parameter {parameter} in RomsData')
+    nc_files = get_daily_files_in_time_range(input_dir, start_time, end_time, 'nc')
 
-    c = ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, values, cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
-    cbar = plt.colorbar(c)
-    cbar.set_label(clabel)
+    time, grid, u_east, v_north, temp, salt = _get_roms_data_from_netcdf(nc_files[0], lon_range, lat_range, time_range)
 
-    if parameter == 'velocity':
-        thin = 5
-        i = np.arange(0, u.shape[0], thin)
-        j = np.arange(0, u.shape[1], thin)
-        u_q = u[i][:, j]
-        v_q = v[i][:, j]
-        lon_q = roms_data.grid.lon[i][:, j]
-        lat_q = roms_data.grid.lat[i][:, j]
-        ax.quiver(lon_q, lat_q, u_q, v_q, scale=10, transform=ccrs.PlateCarree())
+    for i in range(1, len(nc_files)):
+        t, _, u, v, tp, s = _get_roms_data_from_netcdf(nc_files[i], lon_range, lat_range, time_range)
+        time = np.concatenate((time, t))
+        u_east = np.concatenate((u_east, u))
+        v_north = np.concatenate((v_north, v))
+        temp = np.concatenate((temp, tp))
+        salt = np.concatenate((salt, s))
 
-    if show is True:
-        plt.show()
-    else:
-        return ax
+    return RomsData(time, grid, u_east, v_north, temp, salt)
+
+if __name__ == '__main__':
+    roms = read_roms_data_from_multiple_netcdfs('/mnt/j/roms_perth/2017/', datetime(2017, 3, 1), datetime(2017, 3, 3))
+    roms.time
