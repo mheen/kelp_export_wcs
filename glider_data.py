@@ -246,6 +246,6 @@ class GliderData:
         return GliderData(time_datetime, lon, lat, depth, temp, salt, ox2, cphl, u, v)
 
 if __name__ == '__main__':
-    glider_data = GliderData.read_from_netcdf(f'{get_dir_from_json("input/dirs.json", "glider_data")}IMOS_ANFOG_BCEOPSTUV_20220628T064224Z_SL286_FV01_timeseries_END-20220712T082641Z.nc')
+    glider_data = GliderData.read_from_netcdf(f'{get_dir_from_json("glider_data")}IMOS_ANFOG_BCEOPSTUV_20220628T064224Z_SL286_FV01_timeseries_END-20220712T082641Z.nc')
     glider_data_subset = glider_data.get_data_in_time_frame(datetime(2022, 6, 30, 22, 30), datetime(2022, 7, 2, 15))
     glider_data_subset.plot_transect(parameter='salt')

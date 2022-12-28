@@ -1,3 +1,4 @@
+from tools import log
 from location_info import LocationInfo
 from basic_maps import plot_basic_map
 from netCDF4 import Dataset
@@ -5,11 +6,6 @@ import numpy as np
 import pandas as pd
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
-
-import sys
-sys.path.append('..')
-from py_tools.files import get_dir_from_json, get_files_in_dir
-from py_tools import log
 
 class BathymetryData:
     def __init__(self, lon, lat, h):

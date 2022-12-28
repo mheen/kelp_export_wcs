@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import json
 import os
 
-def get_dir_from_json(json_file:str, dirname:str) -> str:
+def get_dir_from_json(dirname:str, json_file='input/dirs.json') -> str:
     with open(json_file, 'r') as f:
         all_dirs = json.load(f)
     return all_dirs[dirname]

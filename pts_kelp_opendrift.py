@@ -63,9 +63,9 @@ def run(release_times:np.ndarray,
 
     run_duration = timedelta(days=run_duration)
 
-    input_dir = get_dir_from_json('input/dirs.json', 'roms_data')
+    input_dir = get_dir_from_json('roms_data')
     input_files = f'{input_dir}{release_times[0].year}/cwa_his_*.nc'
-    output_dir = get_dir_from_json('input/dirs.json', 'opendrift')
+    output_dir = get_dir_from_json('opendrift')
     output_file = f'{output_dir}cwa-perth_{file_description}.nc'
     log.info(f'Simulation output will be saved to: {output_file}')
 
