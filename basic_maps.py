@@ -1,12 +1,8 @@
+from location_info import LocationInfo
 import cartopy.crs as ccrs
 import cartopy.mpl.ticker as cticker
 from cartopy.io import shapereader
 import matplotlib.pyplot as plt
-
-lon_range_perth = [115.25242441860465, 115.87307558139534]
-lat_range_perth = [-32.64677503054363, -31.49135331655606]
-perth_meridians = [115.3, 115.7]
-perth_parallels = [-32.4, -32.0, -31.6]
 
 def add_grid(ax:plt.axes, meridians:list, parallels:list,
               xmarkers:str, ymarkers:str, draw_grid:bool) -> plt.axes:
@@ -33,16 +29,16 @@ def add_grid(ax:plt.axes, meridians:list, parallels:list,
 
     return ax
 
-def perth_map(ax:plt.axes, xmarkers='bottom', ymarkers='left', draw_grid=False) -> plt.axes:
+def plot_basic_map(ax:plt.axes, location_info:LocationInfo, xmarkers='bottom', ymarkers='left', draw_grid=False) -> plt.axes:
     shp = shapereader.Reader('input/GSHHS_coastline_GSR.shp')
     for _, geometry in zip(shp.records(), shp.geometries()):
-        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='lightgray',
-                          edgecolor='black', zorder=5)
+        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='lightgrey',
+                           edgecolor='black', zorder=5)
+    
+    ax = add_grid(ax, location_info.meridians, location_info.parallels, xmarkers, ymarkers, draw_grid)
 
-    ax = add_grid(ax, perth_meridians, perth_parallels, xmarkers, ymarkers, draw_grid)
-
-    ax.set_extent([lon_range_perth[0], lon_range_perth[1],
-                   lat_range_perth[0], lat_range_perth[1]],
-                   ccrs.PlateCarree())
-
+    ax.set_extent([location_info.lon_range[0], location_info.lon_range[1],
+                   location_info.lat_range[0], location_info.lat_range[1],
+                   ccrs.PlateCarree()])
+    
     return ax

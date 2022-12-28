@@ -1,7 +1,8 @@
+from lcoation_info import LocationInfo
 from seawater_density import calculate_density
 from gridfit import gridfit
 from ext.peak_detect import peak_detect
-from basic_maps import perth_map
+from basic_maps import plot_basic_map
 from netCDF4 import Dataset
 import numpy as np
 import cartopy.crs as ccrs
@@ -137,10 +138,10 @@ class GliderData:
         else:
             return ax
 
-    def plot_track(self, ax=None, show=True, show_labels=True, color='k'):
+    def plot_track(self, location_info:LocationInfo, ax=None, show=True, show_labels=True, color='k'):
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            ax = perth_map(ax)
+            ax = plot_basic_map(ax, location_info)
         
         l_nonans_position = np.logical_and(~np.isnan(self.lon), ~np.isnan(self.lat))
         ax.plot(self.lon[l_nonans_position][0], self.lat[l_nonans_position][0],

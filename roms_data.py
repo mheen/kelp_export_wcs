@@ -1,4 +1,5 @@
-from basic_maps import perth_map
+from location_info import LocationInfo
+from basic_maps import plot_basic_map
 from matplotlib import path
 import numpy as np
 from netCDF4 import Dataset
@@ -49,6 +50,15 @@ class RomsGrid:
 
         return lon_range, lat_range
 
+    def get_etas_xis_of_lon_lat_points(self, lon_ps:np.ndarray, lat_ps:np.ndarray) -> tuple:
+        etas = []
+        xis = []
+        for i in range(len(lon_ps)):
+            eta, xi = (self.get_eta_xi_of_lon_lat_point(lon_ps[i], lat_ps[i]))
+            etas.append(eta)
+            xis.append(xi)
+        return np.ndarray(etas), np.ndarray(xis)
+
     def get_eta_xi_of_lon_lat_point(self, lon_p:float, lat_p:float) -> tuple:
         xi, _, eta, _ = bbox2ij(self.lon, self.lat, [lon_p, lon_p+0.1, lat_p, lat_p+0.1])
         return eta, xi
@@ -91,12 +101,12 @@ class RomsData:
         self.salt = salt # [time, s, eta, xi]
         self.h = h # [eta, xi]
 
-    def plot_map(self, parameter:str, t:int, s:int,
+    def plot_map(self, location_info:LocationInfo, parameter:str, t:int, s:int,
                  cmap='RdBu_r', clabel='', vmin=None, vmax=None,
                  ax=None, show=True) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            ax = perth_map(ax)
+            ax = plot_basic_map(ax, location_info)
 
         if hasattr(self, parameter):
             values = getattr(self, parameter)
@@ -217,8 +227,3 @@ class RomsData:
         u_east, v_north = RomsData.convert_roms_u_v_to_u_east_v_north(u, v, sub_grid.angle)
 
         return RomsData(time, sub_grid, u_east, v_north, temp, salt, h)
-
-if __name__ == '__main__':
-    input_path = f'{get_dir_from_json("input/dirs.json", "roms_data")}2022/perth_his_20220701.nc'
-    romsdata = RomsData.read_from_netcdf(input_path)
-    romsdata.plot_map('temp', 0, 0, clabel='Temperature ($^o$C)', vmin=18, vmax=22)

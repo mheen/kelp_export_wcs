@@ -1,4 +1,5 @@
-from basic_maps import perth_map
+from location_info import LocationInfo
+from basic_maps import plot_basic_map
 from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
@@ -16,16 +17,16 @@ class BathymetryData:
         self.lat = lat
         self.h = h
 
-    def plot_contours(self, ax=None, show=True, color='k') -> plt.axes:
+    def plot_contours(self, location_info:LocationInfo, ax=None, show=True, color='k') -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            ax = perth_map(ax)
+            ax = plot_basic_map(ax, location_info)
             
         def _fmt(x):
             s = f'{x:.0f}'
             return s
 
-        cs = ax.contour(self.lon, self.lat, self.h, levels=[10, 25, 50, 100, 150, 200],
+        cs = ax.contour(self.lon, self.lat, self.h, levels=location_info.contour_levels,
                         colors=color, linewidths=1, transform=ccrs.PlateCarree())
         ax.clabel(cs, cs.levels, fontsize=8, inline=True, fmt=_fmt)
 
@@ -45,7 +46,7 @@ class BathymetryData:
         log.info(f'Wrote ROMS bathymetry data to: {output_path}')
 
     @staticmethod
-    def read_from_csv(input_path='input/perth_roms_bathymetry.csv'):
+    def read_from_csv(input_path:str):
         log.info(f'Reading bathymetry data from: {input_path}')
 
         df = pd.read_csv(input_path)
@@ -56,7 +57,7 @@ class BathymetryData:
         return BathymetryData(lon, lat, h)
 
     @staticmethod
-    def read_from_netcdf(input_path='input/perth_roms_grid.nc'):
+    def read_from_netcdf(input_path:str):
         log.info(f'Reading bathymetry data from: {input_path}')
 
         netcdf = Dataset(input_path)
@@ -66,7 +67,3 @@ class BathymetryData:
         netcdf.close()
 
         return BathymetryData(lon, lat, h)
-
-if __name__ == '__main__':
-    bathy = BathymetryData.read_from_netcdf()
-    bathy.plot_contours()

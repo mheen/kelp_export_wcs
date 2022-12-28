@@ -1,4 +1,5 @@
-from basic_maps import perth_map
+from location_info import LocationInfo
+from basic_maps import plot_basic_map
 import rasterio
 import numpy as np
 import cartopy.crs as ccrs
@@ -16,10 +17,10 @@ class KelpProbability:
         self.lat = lat
         self.prob = probability
 
-    def plot(self, ax=None, show=True, output_path=None, probability_threshold=0.) -> plt.axes:
+    def plot(self, location_info:LocationInfo, ax=None, show=True, output_path=None, probability_threshold=0.) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
-            ax = perth_map(ax)
+            ax = plot_basic_map(ax, location_info)
 
         l_prob = self.prob >= probability_threshold
         prob = np.copy(self.prob)
@@ -39,7 +40,7 @@ class KelpProbability:
             return ax
 
     @staticmethod
-    def read_from_tiff(input_path='input/perth_kelp_probability.tif') -> tuple:
+    def read_from_tiff(input_path:str) -> tuple:
         log.info(f'Reading kelp probability map from: {input_path}')
 
         dataset = rasterio.open(input_path)
@@ -56,7 +57,7 @@ class KelpProbability:
 
         return KelpProbability(lon, lat, prob)
 
-def generate_random_releases_based_on_probability(rng: np.random.default_rng, n_thin=25, input_path='input/perth_kelp_probability.tif') -> tuple:
+def generate_random_releases_based_on_probability(rng: np.random.default_rng, input_path:str, n_thin=25) -> tuple:
     log.info(f'''Getting kelp release locations based on probability
              from probability map: {input_path}''')
 
@@ -71,8 +72,7 @@ def generate_random_releases_based_on_probability(rng: np.random.default_rng, n_
 
     return kelp_prob.lon[l_release], kelp_prob.lat[l_release]
 
-def get_kelp_coordinates(probability_threshold=0.8,
-                         input_path='input/perth_kelp_probability.tif') -> tuple:
+def get_kelp_coordinates(input_path:str, probability_threshold=0.8) -> tuple:
     log.info(f'''Getting kelp coordinates using probability threshold {probability_threshold},
              from probability map: {input_path}''')
 
@@ -84,6 +84,3 @@ def get_kelp_coordinates(probability_threshold=0.8,
     lon, lat = rasterio.transform.xy(dataset.transform, i_kelp[0], i_kelp[1], offset='center')
 
     return np.array(lon), np.array(lat)
-
-if __name__ == '__main__':
-    kelp_prob = KelpProbability.read_from_tiff()
