@@ -1,16 +1,13 @@
+from tools.files import get_dir_from_json
+from tools.timeseries import add_month_to_time
+from tools import log
 from readers import reader_ROMS
 from models.opendrift_bottomdrifters import BottomDrifters
 from bathymetry_data import BathymetryData
 from kelp_map import generate_random_releases_based_on_probability
 from datetime import datetime, timedelta
-import os
 import numpy as np
-
 import sys
-sys.path.append('..')
-from py_tools.files import get_dir_from_json
-from py_tools.timeseries import add_month_to_time
-from py_tools import log
 
 # TEMP: old release locations
 # lon_release = [115.71, 115.68]

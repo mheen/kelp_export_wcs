@@ -1,4 +1,6 @@
-from lcoation_info import LocationInfo
+from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range
+from tools.files import get_dir_from_json
+from location_info import LocationInfo
 from seawater_density import calculate_density
 from gridfit import gridfit
 from ext.peak_detect import peak_detect
@@ -9,11 +11,6 @@ import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from scipy import interpolate
-
-import sys
-sys.path.append('..')
-from py_tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range
-from py_tools.files import get_dir_from_json
 
 class GliderData:
     def __init__(self, time:np.ndarray,

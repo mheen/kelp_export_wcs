@@ -1,14 +1,10 @@
+from tools.files import get_daily_files_in_time_range
+from tools.timeseries import convert_time_to_datetime, get_l_time_range
 from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
 from netCDF4 import Dataset
 from datetime import datetime
-
-import sys
-sys.path.append('..')
-from py_tools.files import get_dir_from_json, get_daily_files_in_time_range
-from py_tools.timeseries import convert_time_to_datetime, get_l_time_range
-from py_tools import log
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     

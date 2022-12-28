@@ -1,13 +1,10 @@
+from tools import log
 from location_info import LocationInfo
 from basic_maps import plot_basic_map
 import rasterio
 import numpy as np
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
-
-import sys
-sys.path.append('..')
-from py_tools import log
 
 class KelpProbability:
     def __init__(self, lon:np.ndarray,
