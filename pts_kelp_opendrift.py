@@ -101,7 +101,7 @@ def run(release_times:np.ndarray,
     return o
 
 def run_multiple_releases(year:int, start_month:int, start_day:int,
-                          run_months:int, release_months:int, n_thin=25,
+                          run_months:int, release_months:int, n_thin=100,
                           dt=60*10, dt_out=3*60*60):
 
     rng = np.random.default_rng(42) # fix random seed to create random releases based on kelp probability
@@ -110,7 +110,7 @@ def run_multiple_releases(year:int, start_month:int, start_day:int,
     lats0 = []
     n_particles = 0
     for t in times0:
-        lon0, lat0 = generate_random_releases_based_on_probability(rng, n_thin=n_thin)
+        lon0, lat0 = generate_random_releases_based_on_probability(rng, 'input/perth_kelp_probability.tif', n_thin=n_thin)
         lons0.append(lon0)
         lats0.append(lat0)
         n_particles += len(lon0)
