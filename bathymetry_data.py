@@ -26,6 +26,12 @@ class BathymetryData:
                         colors=color, linewidths=1, transform=ccrs.PlateCarree())
         ax.clabel(cs, cs.levels, fontsize=8, inline=True, fmt=_fmt)
 
+        cs200 = ax.contour(self.lon, self.lat, self.h, [200],
+                           colors='k', linewidths=1.5, transform=ccrs.PlateCarree())
+
+        t = ax.text(114.93, -32.10, 'Perth canyon', va='center', ha='right', transform=ccrs.PlateCarree())
+        t.set_bbox(dict(facecolor='w', alpha=0.6, edgecolor='w'))
+
         if show is True:
             plt.show()
         else:
