@@ -1,5 +1,5 @@
 from tools import log
-from location_info import LocationInfo
+from location_info import LocationInfo, get_location_info
 from basic_maps import plot_basic_map
 from netCDF4 import Dataset
 import numpy as np
@@ -69,3 +69,8 @@ class BathymetryData:
         netcdf.close()
 
         return BathymetryData(lon, lat, h)
+
+if __name__ == '__main__':
+    bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
+    location_info = get_location_info('cwa_perth')
+    bathymetry.plot_contours(location_info)
