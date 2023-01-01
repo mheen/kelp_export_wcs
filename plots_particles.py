@@ -1,7 +1,7 @@
 from tools.timeseries import get_closest_time_index
 from tools.files import get_dir_from_json
 from tools import log
-from particles import Particles
+from particles import Particles, DensityGrid, get_particle_density
 from bathymetry_data import BathymetryData
 from kelp_map import KelpProbability
 from location_info import LocationInfo, get_location_info
@@ -273,6 +273,49 @@ def plot_particle_locations(particles:Particles, location_info:LocationInfo,
     else:
         return ax
 
+def plot_initial_particle_density_entering_deep_sea(particles:Particles, location_info:LocationInfo,
+                                                    h_deep_sea:float, dx=0.01,
+                                                    ax=None, show=True, output_path=None,
+                                                    cmap='plasma', vmin=None, vmax=None):
+    
+    bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
+
+    l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
+    l_deep_sea_any_time = np.sum(l_deep_sea, axis=1).astype('bool')
+    lon0_ds = particles.lon0[l_deep_sea_any_time]
+    lat0_ds = particles.lat0[l_deep_sea_any_time]
+    lon0_nds = particles.lon0[~l_deep_sea_any_time]
+    lat0_nds = particles.lat0[~l_deep_sea_any_time]
+
+    grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
+    density_ds = get_particle_density(grid, lon0_ds, lat0_ds)
+    density_nds = get_particle_density(grid, lon0_nds, lat0_nds)
+    density = density_ds/(density_ds+density_nds)*100
+    
+    l_no_particles = np.logical_and(density_ds==0, density_nds==0)
+    density[l_no_particles] = np.nan
+
+    x, y = np.meshgrid(grid.lon, grid.lat)
+
+    if ax is None:
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        ax = plot_basic_map(ax, location_info)
+
+    c = ax.pcolormesh(x, y, density, cmap=cmap, vmin=vmin, vmax=vmax)
+    cbar = plt.colorbar(c)
+    cbar.set_label(f'Percentage particles reaching shelf break per {dx}$^o$ grid cell')
+
+    ax = bathymetry.plot_contours(get_location_info('cwa_perth'), ax=ax, show=False, color='#808080')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
 if __name__ == '__main__':
     location_info = get_location_info('cwa_perth')
     h_deep_sea = 500 # m depth: edge of continental shelf
@@ -285,5 +328,6 @@ if __name__ == '__main__':
 
     # plot_particle_locations(particles, location_info, t=0)
 
-    plot_histogram_arriving_in_deep_sea(particles, h_deep_sea)
+    # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea)
+    plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea)
 
