@@ -1,13 +1,15 @@
 from tools.files import get_dir_from_json
-from tools.timeseries import get_closest_time_index
-from tools.coordinates import get_distance_between_points, get_points_on_line_between_points
+from tools.timeseries import get_closest_time_index, get_l_time_range
+from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_bearing_between_points
+from tools import log
 from roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs
 from location_info import LocationInfo, get_location_info
 from basic_maps import plot_basic_map
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 
 def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float, lon2:float, lat2:float, ds:float) -> tuple:
@@ -27,7 +29,7 @@ def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
 
 def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
                   parameter:str, time:datetime, s=-1, # default: surface
-                  ax=None, show=True,
+                  ax=None, show=True, output_path=None,
                   cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
     if ax is None:
         ax = plt.axes(projection=ccrs.PlateCarree())
@@ -50,8 +52,8 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
         elif len(values.shape) == 2:
             values = values[:, :] # [eta, xi]
     elif parameter == 'velocity':
-        u = roms_data.u[t, s, :, :]
-        v = roms_data.v[t, s, :, :]
+        u = roms_data.u_east[t, s, :, :]
+        v = roms_data.v_north[t, s, :, :]
         values = np.sqrt(u**2+v**2)
     else:
         raise ValueError(f'Unknown parameter {parameter} in RomsData')
@@ -59,6 +61,8 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
     c = ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, values, cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
     cbar = plt.colorbar(c)
     cbar.set_label(clabel)
+
+    ax.set_title(time.strftime('%d %b %Y'))
 
     if parameter == 'velocity':
         thin = 5
@@ -70,6 +74,10 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
         lat_q = roms_data.grid.lat[i][:, j]
         ax.quiver(lon_q, lat_q, u_q, v_q, scale=10, transform=ccrs.PlateCarree())
 
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
     if show is True:
         plt.show()
     else:
@@ -78,7 +86,7 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
 def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
                                 lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
                                 parameter:str, time:datetime, s=-1, # default: surface
-                                ax=None, show=True,
+                                ax=None, show=True, output_path=None,
                                 cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
 
     if ax is None:
@@ -89,26 +97,31 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
     lon = roms_data.grid.lon[eta, xi]
     lat = roms_data.grid.lat[eta, xi]
 
-    # TEMP: show glider points as test
-    df = pd.read_csv('test_glider_coords.csv')
-    glider_lon = df['lon'].values
-    glider_lat = df['lat'].values
-
     ax = plot_roms_map(roms_data, location_info, parameter, time, s=s, ax=ax, show=False, cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
-    ax.plot(glider_lon, glider_lat, 'xk', label='Glider transect')
-    ax.plot(lon, lat, '.k', label='ROMS transect')
+    ax.plot(lon, lat, '-k', label='ROMS transect')
 
     ax.legend(loc='upper left')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
 
     if show is True:
         plt.show()
     else:
         return ax
 
+def get_down_transect_velocity_component(u:np.ndarray, v:np.ndarray,
+                                         lon1:float, lat1:float, lon2:float, lat2:float) -> np.ndarray:
+    alpha = get_bearing_between_points(lon1, lat1, lon2, lat2)
+    alpha_rad = np.deg2rad(alpha)
+    down_transect = u*np.cos(alpha_rad)+v*np.sin(alpha_rad)
+    return down_transect
+
 def plot_roms_transect(roms_data:RomsData,
                        lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
                        parameter:str, time:datetime,
-                       ax=None, show=True,
+                       ax=None, show=True, output_path=None,
                        cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
     
     eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
@@ -131,13 +144,14 @@ def plot_roms_transect(roms_data:RomsData,
         elif len(values.shape) == 2:
             values = values[eta, xi] # [eta, xi]
     elif parameter == 'velocity':
-        u = roms_data.u[t, :, eta, xi]
-        v = roms_data.v[t, :, eta, xi]
+        u = roms_data.u_east[t, :, eta, xi]
+        v = roms_data.v_north[t, :, eta, xi]
         values = np.sqrt(u**2+v**2)
     else:
         raise ValueError(f'Unknown parameter {parameter} in RomsData to plot transect')
 
     if ax is None:
+        fig = plt.figure(figsize=(8, 3))
         ax = plt.axes()
     distance2d = np.repeat(distance[np.newaxis, :], z.shape[0], axis=0)
     c = ax.pcolormesh(distance2d, z, values.transpose(), cmap=cmap, vmin=vmin, vmax=vmax)
@@ -151,17 +165,122 @@ def plot_roms_transect(roms_data:RomsData,
     cbar = plt.colorbar(c)
     cbar.set_label(clabel)
     
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
     if show is True:
         plt.show()
     else:
         return ax
 
+def animate_roms_transect(roms_data:RomsData,
+                          lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
+                          parameter:str, start_time:datetime, end_time:datetime,
+                          show_quivers=True, dpi=200, fps=10, output_path=None,
+                          cmap='RdBu_r', clabel='', vmin=None, vmax=None):
+
+    writer = animation.PillowWriter(fps=fps)
+
+    # intialise plot and load non-changing data
+    plt.rcParams.update({'font.size' : 15})
+    plt.rcParams.update({'font.family': 'arial'})
+    plt.rcParams.update({'figure.dpi': dpi})
+    fig = plt.figure(figsize=(8, 3))
+    ax = plt.axes()
+    
+    eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
+
+    lon = roms_data.grid.lon[eta, xi]
+    lat = roms_data.grid.lat[eta, xi]
+    z = roms_data.grid.z[:, eta, xi]
+    h = roms_data.grid.h[eta, xi]
+    distance = get_distance_along_transect(lon, lat)/1000 # distance in km
+    distance2d = np.repeat(distance[np.newaxis, :], z.shape[0], axis=0)
+
+    l_time = get_l_time_range(roms_data.time, start_time, end_time)
+    time = roms_data.time[l_time]
+
+    if parameter == 'velocity':
+        u = roms_data.u_east[l_time, :, :, :][:, :, eta, xi]
+        v = roms_data.v_north[l_time, :, :, :][:, :, eta, xi]
+        values = np.sqrt(u**2+v**2)
+    else:
+        values = getattr(roms_data, parameter)[l_time, :, :, :][:, :, eta, xi]
+    
+    if show_quivers is True:
+        # velocity in transect direction
+        u = roms_data.u_east[l_time, :, :, :][:, :, eta, xi]
+        v = roms_data.v_north[l_time, :, :, :][:, :, eta, xi]
+        s_layer = 2
+        index_shallow = h<=75
+        thin_h = 5
+        index_thin = (np.empty(index_shallow.shape)*0).astype('bool')
+        index_thin[::thin_h] = True
+        index_h = np.logical_and(index_shallow, index_thin)
+        scale = 50
+        n_multiply = 10
+        vel = get_down_transect_velocity_component(u[:, s_layer, index_h], v[:, s_layer, index_h], lon1, lat1, lon2, lat2)*n_multiply
+
+    # animated data
+    transect = ax.pcolormesh(distance2d, z, values[0, :, :], cmap=cmap, vmin=vmin, vmax=vmax)
+    if show_quivers is True:
+        quiver = ax.quiver(distance2d[s_layer, index_h], z[s_layer, index_h], vel[0, :], np.zeros(vel[0, :].shape), scale=scale, color='k')
+
+    # fixed data
+    ax.fill_between(distance, -h, np.nanmin(z), edgecolor='k', facecolor='#989898') # ROMS bottom
+    if show_quivers is True:
+        ax.quiverkey(quiver, 0.2, 0.2, 0.5*n_multiply, 'Along transect velocity (0.5 m/s)', labelpos='E', coordinates='figure')
+    ax.set_xlabel('Distance along transect (km)')
+    ax.set_xlim([0, np.nanmax(distance)])
+    ax.set_ylabel('Depth (m)')
+    ax.set_ylim([np.nanmin(z), 0])
+    
+    cbar = plt.colorbar(transect)
+    cbar.set_label(clabel)
+
+    # animated text
+    ttl = ax.text(0.5, 1.04,'', transform=ax.transAxes,
+                  ha='center', va='bottom',
+                  bbox=dict(facecolor='w', alpha=0.3, edgecolor='w', pad=2))
+    ttl.set_animated(True)
+
+    def animate(i):
+        transect.set_array(values[i, :, :].ravel())
+        title = time[i].strftime('%d %b %Y %H:%M')
+        ttl.set_text(title)
+        if show_quivers is True:
+            quiver.set_UVC(vel[i, :], np.zeros(vel[i, :].shape))
+            return transect, quiver, ttl
+        return transect, ttl
+
+    fig.tight_layout()
+
+    anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(time), blit=True)
+    if output_path is not None:
+        log.info(f'Saving animation to: {output_path}')
+        anim.save(output_path, writer=writer)
+    else:
+        plt.show()
+
 if __name__ == '__main__':
     location_info = get_location_info('perth')
     input_dir = f'{get_dir_from_json("roms_data")}2022/'
-    start_date = datetime(2022, 6, 30)
-    end_date = datetime(2022, 7, 2)
+    start_date = datetime(2022, 7, 1)
+    end_date = datetime(2022, 7, 10)
     roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
     
-    plot_roms_map_with_transect(roms, location_info, 115.61, -31.80, 115.26, -31.95, 5000, 'h', start_date)
-    plot_roms_transect(roms, 115.61, -31.80, 115.26, -31.95, 500, 'temp', start_date)
+    lon1 = 115.70
+    lat1 = -31.76
+    lon2 = 115.26
+    lat2 = -31.95
+    ds = 500
+
+    # mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
+    # output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
+    # plot_roms_map_with_transect(roms, location_info, lon1, lat1, lon2, lat2, ds, 'temp', mid_date,
+    #                             vmin=18, vmax=22, clabel='Temperature ($^o$C)', output_path=output_path_map, show=False)
+    
+    output_path_animation = f'{get_dir_from_json("plots")}roms_dswc_temperature_animation_{start_date.strftime("%b-%Y")}.gif'
+    animate_roms_transect(roms, lon1, lat1, lon2, lat2, ds, 'temp', start_date, end_date+timedelta(days=1), output_path=output_path_animation,
+                          vmin=18, vmax=22, clabel='Temperature ($^o$C)', show_quivers=False)

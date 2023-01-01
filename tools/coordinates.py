@@ -1,6 +1,11 @@
 from geographiclib.geodesic import Geodesic
 import numpy as np
 
+def get_bearing_between_points(lon1, lat1, lon2, lat2):
+    geod = Geodesic.WGS84
+    g = geod.Inverse(lat1, lon1, lat2, lon2)
+    return g['azi1'] # bearing in degrees
+
 def get_distance_between_points(lon1:float, lat1:float, lon2:float, lat2:float) -> float:
     geod = Geodesic.WGS84
     g = geod.Inverse(lat1, lon1, lat2, lon2)
