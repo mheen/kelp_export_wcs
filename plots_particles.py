@@ -9,10 +9,37 @@ from basic_maps import plot_basic_map
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib.dates as mdates
+import matplotlib.units as munits
 import cartopy.crs as ccrs
 from warnings import warn
 import numpy as np
-from datetime import datetime
+from datetime import date, datetime, timedelta
+
+converter = mdates.ConciseDateConverter()
+munits.registry[np.datetime64] = converter
+munits.registry[date] = converter
+munits.registry[datetime] = converter
+
+locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
+formatter = mdates.ConciseDateFormatter(locator)
+formatter.formats = ['%y',  # ticks are mostly years
+                    '%b',       # ticks are mostly months
+                    '%d',       # ticks are mostly days
+                    '%H:%M',    # hrs
+                    '%H:%M',    # min
+                    '%S.%f', ]  # secs
+# these are mostly just the level above...
+formatter.zero_formats = [''] + formatter.formats[:-1]
+# ...except for ticks that are mostly hours, then it is nice to have
+# month-day:
+formatter.zero_formats[3] = '%d-%b'
+
+formatter.offset_formats = ['',
+                            '%Y',
+                            '%b %Y',
+                            '%d %b %Y',
+                            '%d %b %Y',
+                            '%d %b %Y %H:%M', ]
 
 def animate_particles(particles:Particles, location_info:LocationInfo,
                       show_bathymetry=True, show_kelp_map=True,
@@ -73,7 +100,7 @@ def plot_matrix_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
         ax = plt.axes()
     
     time_release, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
-    n_dim_matrix = len(matrix_arriving_ds.flatten().shape)
+    n_dim_matrix = len(matrix_arriving_ds.shape)
     if n_dim_matrix == 1:
         warn(f'''There is only a single release available in this simulation;
                 matrix_arriving_ds is {n_dim_matrix}D, so this plot cannot be made. Skipping.''')
@@ -98,10 +125,10 @@ def plot_matrix_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
                 tick_labels_int.append('')
         return tick_labels_int
 
-    myFmt = mdates.DateFormatter('%Y-%m-%d')
-    ax.set_xticks(time_release[::5])
-    ax.set_xticklabels(time_release[::5], rotation=90)
-    ax.xaxis.set_major_formatter(myFmt)
+    # myFmt = mdates.DateFormatter('%d-%m-%Y')
+    # ax.set_xticks(time_release[::5])
+    # ax.set_xticklabels(time_release[::5], rotation=90)
+    # ax.xaxis.set_major_formatter(myFmt)
     ax.set_xlabel('Release date')
     ax.set_xlim([time_release[0], time_release[-1]])
 
@@ -119,14 +146,52 @@ def plot_matrix_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
     else:
         return ax
 
+def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
+                                        ax=None, show=True, output_path=None,
+                                        color='#1b7931', edgecolor='none'):
+
+    _, t_arriving_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+    
+    n_days = (particles.time[-1]-particles.time[0]).days
+    time_days = np.array([particles.time[0]+timedelta(days=n) for n in range(n_days)])
+
+    n_arriving, _ = np.histogram(particles.time[t_arriving_ds], bins=time_days)
+    
+    n_particles_in_simulation = particles.get_n_particles_in_simulation()
+    n_particles_in_simulation_per_day = []
+    for i in range(len(time_days)):
+        i_time = np.where(particles.time==time_days[i])[0][0]
+        n_particles_in_simulation_per_day.append(n_particles_in_simulation[i_time])
+    n_particles_in_simulation_per_day = np.array(n_particles_in_simulation_per_day)
+
+    if ax is None:
+        fig = plt.figure(figsize=(10, 5))
+        ax = plt.axes()
+
+    ax.bar(time_days[:-1], n_arriving/n_particles_in_simulation_per_day[:-1]*100, color=color, edgecolor=edgecolor)
+
+    ax.set_xlim([time_days[0], time_days[-1]])
+    ax.set_ylabel('Particles moving past shelf break (%)')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
 def plot_age_in_deep_sea(particles:Particles, h_deep_sea:float, total_particles=None,
-                         linestyle='-', color='k', label='',
+                         linestyle='-', color='k', label='', age_lim=None,
                          ax=None, show=True, output_path=None) -> plt.axes:
     if ax is None:
         fig = plt.figure(figsize=(10, 5))
         ax = plt.axes()
         ax.set_xlabel('Particle age (days)')
         ax.set_ylabel('Fraction in deep sea')
+        if age_lim is not None:
+            ax.set_xlim([0, age_lim])
 
     _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
     n_dim_matrix = len(matrix_arriving_ds.shape)
@@ -210,15 +275,15 @@ def plot_particle_locations(particles:Particles, location_info:LocationInfo,
 
 if __name__ == '__main__':
     location_info = get_location_info('cwa_perth')
-    h_deep_sea = 200 # m depth: edge of continental shelf
+    h_deep_sea = 500 # m depth: edge of continental shelf
 
     input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
     particles = Particles.read_from_netcdf(input_path)
     
-    animation_path = f'{get_dir_from_json("plots")}animation_cwa-perth_2017-Mar-Aug.gif'
-    animate_particles(particles, location_info, output_path=animation_path)
+    # animation_path = f'{get_dir_from_json("plots")}animation_cwa-perth_2017-Mar-Aug.gif'
+    # animate_particles(particles, location_info, output_path=animation_path)
 
     # plot_particle_locations(particles, location_info, t=0)
 
-    # plot_age_in_deep_sea(particles, h_deep_sea)
-    
+    plot_histogram_arriving_in_deep_sea(particles, h_deep_sea)
+
