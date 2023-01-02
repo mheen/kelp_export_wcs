@@ -10,7 +10,7 @@ import numpy as np
 
 def plot_contours(lon:np.ndarray, lat:np.ndarray, h:np.ndarray,
                   location_info:LocationInfo, ax=None, show=True, fontsize=10,
-                  color='k', highlight_contour=[300], show_perth_canyon=True) -> plt.axes:
+                  color='k', highlight_contour=[600], show_perth_canyon=True) -> plt.axes:
 
     if ax is None:
         ax = plt.axes(projection=ccrs.PlateCarree())
@@ -85,7 +85,7 @@ def plot_bathymetry(lon:np.ndarray, lat:np.ndarray, h:np.ndarray,
 def plot_bathymetry_and_contours(lon:np.ndarray, lat:np.ndarray, h:np.ndarray,
                                  location_info:LocationInfo, ax=None,
                                  show=True, output_path=None, contour_fontsize=12,
-                                 color='k', highlight_contour=[300], show_perth_canyon=True,
+                                 color='k', highlight_contour=[600], show_perth_canyon=True,
                                  cmap='BrBG', vmin=None, vmax=None):
 
     fig = plt.figure(figsize=(10, 8))
