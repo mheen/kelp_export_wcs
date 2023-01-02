@@ -1,8 +1,10 @@
 from tools.files import get_dir_from_json
 from tools.timeseries import get_closest_time_index, get_l_time_range
-from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_bearing_between_points
+from tools.coordinates import get_bearing_between_points
 from tools import log
 from roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs
+from roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
+from bathymetry_data import BathymetryData
 from location_info import LocationInfo, get_location_info
 from basic_maps import plot_basic_map
 import cartopy.crs as ccrs
@@ -10,22 +12,6 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 from datetime import datetime, timedelta
-import pandas as pd
-
-def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float, lon2:float, lat2:float, ds:float) -> tuple:
-    lons, lats = get_points_on_line_between_points(lon1, lat1, lon2, lat2, ds)
-    eta, xi = grid.get_eta_xi_of_lon_lat_point(lons, lats)
-    return eta, xi
-
-def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
-    distance = [0]
-    
-    for i in range(len(lons)-1):
-        d = get_distance_between_points(lons[i], lats[i], lons[i+1], lats[i+1])
-        distance.append(d)
-    distance = np.array(distance)
-    
-    return np.cumsum(distance) # distance in meters
 
 def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
                   parameter:str, time:datetime, s=-1, # default: surface
@@ -86,7 +72,7 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
 def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
                                 lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
                                 parameter:str, time:datetime, s=-1, # default: surface
-                                ax=None, show=True, output_path=None,
+                                ax=None, show=True, output_path=None, color='k',
                                 cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
 
     if ax is None:
@@ -98,7 +84,7 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
     lat = roms_data.grid.lat[eta, xi]
 
     ax = plot_roms_map(roms_data, location_info, parameter, time, s=s, ax=ax, show=False, cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
-    ax.plot(lon, lat, '-k', label='ROMS transect')
+    ax.plot(lon, lat, '-', color=color, label='ROMS transect')
 
     ax.legend(loc='upper left')
 
@@ -263,6 +249,44 @@ def animate_roms_transect(roms_data:RomsData,
     else:
         plt.show()
 
+def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
+                        lon1:float, lat1:float, lon2:float, lat2:float, ds=5000,
+                        show=True, output_path=None,
+                        cmap='RdBu_r', vmin=None, vmax=None):
+    
+    dhdx, h, distance = get_gradient_along_transect(roms_data, 'h', 0, roms_data.time[0], lon1, lat1, lon2, lat2, ds)
+
+    fig = plt.figure(figsize=(10, 8))
+    ax1 = plt.subplot(2, 5, (1, 3))
+    ax1.plot(distance[1:], dhdx, '-k')
+    ax1.set_xlim(distance[0], distance[-1])
+    ax1.set_xticklabels([])
+    ax1.set_xlim([0, np.nanmax(distance)])
+    ax1.set_ylabel('Depth gradient along transect (m/km)')
+
+    ax2 = plt.subplot(1, 5, (4, 10), projection=ccrs.PlateCarree())
+    ax2 = plot_basic_map(ax2, location_info)
+    ax2 = plot_roms_map_with_transect(roms_data, location_info, lon1, lat1, lon2, lat2, ds, 'h', roms_data.time[0],
+                                      ax=ax2, show=False, clabel='Bathymetry (m)', cmap=cmap, vmin=vmin, vmax=vmax,
+                                      color='#e4e4e4')
+    cs = ax2.contour(roms_data.grid.lon, roms_data.grid.lat, roms_data.grid.h, levels=location_info.contour_levels,
+                     colors='k', linewidths=1, transform=ccrs.PlateCarree())
+    ax2.clabel(cs, cs.levels, fontsize=8, inline=True)
+    
+    ax3 = plt.subplot(2, 5, (6, 8))
+    ax3.fill_between(distance, -h, -np.nanmax(h), edgecolor='k', facecolor='#989898')
+    ax3.set_xlim([0, np.nanmax(distance)])
+    ax3.set_ylim([-np.nanmax(h), 0])
+    ax3.set_xlabel('Distance along transect (km)')
+    ax3.set_ylabel('')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+
 if __name__ == '__main__':
     location_info = get_location_info('perth')
     input_dir = f'{get_dir_from_json("roms_data")}2022/'
@@ -276,11 +300,24 @@ if __name__ == '__main__':
     lat2 = -31.95
     ds = 500
 
-    # mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
-    # output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
-    # plot_roms_map_with_transect(roms, location_info, lon1, lat1, lon2, lat2, ds, 'temp', mid_date,
-    #                             vmin=18, vmax=22, clabel='Temperature ($^o$C)', output_path=output_path_map, show=False)
+    mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
+    output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
+    plot_roms_map_with_transect(roms, location_info, lon1, lat1, lon2, lat2, ds, 'temp', mid_date,
+                                vmin=18, vmax=22, clabel='Temperature ($^o$C)', output_path=output_path_map, show=False)
     
-    output_path_animation = f'{get_dir_from_json("plots")}roms_dswc_temperature_animation_{start_date.strftime("%b-%Y")}.gif'
-    animate_roms_transect(roms, lon1, lat1, lon2, lat2, ds, 'temp', start_date, end_date+timedelta(days=1), output_path=output_path_animation,
-                          vmin=18, vmax=22, clabel='Temperature ($^o$C)', show_quivers=False)
+    # output_path_animation = f'{get_dir_from_json("plots")}roms_dswc_temperature_animation_{start_date.strftime("%b-%Y")}.gif'
+    # animate_roms_transect(roms, lon1, lat1, lon2, lat2, ds, 'temp', start_date, end_date+timedelta(days=1), output_path=output_path_animation,
+    #                       vmin=18, vmax=22, clabel='Temperature ($^o$C)', show_quivers=False)
+
+
+    # lon1 = 115.70
+    # lat1 = -31.76
+    # lon2 = 114.47
+    # lat2 = -31.80
+
+    # location_info = get_location_info('cwa_perth_zoom')
+    # input_dir = f'{get_dir_from_json("roms_data")}2017/'
+    # start_date = datetime(2017, 5, 1)
+    # end_date = datetime(2017, 5, 2)
+    # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
+    # plot_depth_gradient(roms, location_info, lon1, lat1, lon2, lat2)

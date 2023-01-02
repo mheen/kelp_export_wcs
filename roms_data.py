@@ -1,5 +1,6 @@
 from tools.files import get_daily_files_in_time_range
-from tools.timeseries import convert_time_to_datetime, get_l_time_range
+from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
+from tools.coordinates import get_distance_between_points, get_points_on_line_between_points
 from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
@@ -215,6 +216,48 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
 
     return RomsData(time, grid, u_east, v_north, temp, salt)
 
-if __name__ == '__main__':
-    roms = read_roms_data_from_multiple_netcdfs('/mnt/j/roms_perth/2017/', datetime(2017, 3, 1), datetime(2017, 3, 3))
-    roms.time
+def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float, lon2:float, lat2:float, ds:float) -> tuple:
+    lons, lats = get_points_on_line_between_points(lon1, lat1, lon2, lat2, ds)
+    eta, xi = grid.get_eta_xi_of_lon_lat_point(lons, lats)
+    return eta, xi
+
+def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
+    distance = [0]
+    
+    for i in range(len(lons)-1):
+        d = get_distance_between_points(lons[i], lats[i], lons[i+1], lats[i+1])
+        distance.append(d)
+    distance = np.array(distance)
+    
+    return np.cumsum(distance) # distance in meters
+
+def get_gradient_along_transect(roms_data:RomsData, parameter:str, s_layer:int, time:datetime,
+                                lon1:float, lat1:float, lon2:float, lat2:float, ds:float) -> tuple:
+    
+    eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
+    lon = roms_data.grid.lon[eta, xi]
+    lat = roms_data.grid.lat[eta, xi]
+    distance = get_distance_along_transect(lon, lat)/1000 # distance in km
+
+    t = get_closest_time_index(roms_data.time, time)
+
+    if hasattr(roms_data, parameter):
+        values = getattr(roms_data, parameter)
+    elif hasattr(roms_data.grid, parameter):
+        values = getattr(roms_data.grid, parameter)
+    else:
+        raise ValueError(f'Unknown ROMS parameter {parameter} requested.')
+
+    if len(values.shape) == 2: # [eta, xi]
+        values = values[eta, xi]
+    elif len(values.shape) == 3: # [time, eta, xi]
+        values = values[t, eta, xi]
+    elif len(values.shape) == 4: # [time, s, eta, xi]
+        values = values[t, s_layer, eta, xi]
+
+    dvalue = np.diff(values)
+    dx = np.diff(distance)
+
+    gradient = dvalue/dx
+
+    return gradient, values, distance
