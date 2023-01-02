@@ -182,13 +182,13 @@ def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
     n_particles_in_simulation_per_day = np.array(n_particles_in_simulation_per_day)
 
     if ax is None:
-        fig = plt.figure(figsize=(10, 5))
+        fig = plt.figure(figsize=(10, 4))
         ax = plt.axes()
 
     ax.bar(time_days[:-1], n_arriving/n_particles_in_simulation_per_day[:-1]*100, color=color, edgecolor=edgecolor)
 
     ax.set_xlim([time_days[0], time_days[-1]])
-    ax.set_ylabel('Particles moving past shelf break (%)')
+    ax.set_ylabel('Particles moving\npast shelf break (%)')
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -320,7 +320,7 @@ def plot_initial_particle_density_entering_deep_sea(particles:Particles, locatio
 
     c = ax.pcolormesh(x, y, density, cmap=cmap, vmin=vmin, vmax=vmax)
     cbar = plt.colorbar(c)
-    cbar.set_label(f'Percentage particles reaching shelf break per {dx}$^o$ grid cell')
+    cbar.set_label(f'Particles passing shelf break\n(% per {dx}$^o$ grid cell)')
 
     ax = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
                        ax=ax, show=False, color='#808080', show_perth_canyon=False, highlight_contour=None)
@@ -340,12 +340,16 @@ if __name__ == '__main__':
 
     input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
     particles = Particles.read_from_netcdf(input_path)
+
+    plt.rcParams.update({'font.size' : 15})
     
-    animation_path = f'{get_dir_from_json("plots")}cwa-perth_animation_2017-Mar-Aug.gif'
-    animate_particles(particles, location_info, h_deep_sea, output_path=animation_path)
+    # animation_path = f'{get_dir_from_json("plots")}cwa-perth_animation_2017-Mar-Aug.gif'
+    # animate_particles(particles, location_info, h_deep_sea, output_path=animation_path)
 
-    # plot_particle_locations(particles, location_info, t=0)
-
-    # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea)
-    # plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea)
+    # output_path_histogram = f'{get_dir_from_json("plots")}cwa-perth_histogram_arriving_2017-Mar-Aug.jpg'
+    # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea, output_path=output_path_histogram, show=False)
+    
+    output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_2017-Mar-Aug.jpg'
+    plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
+                                                    output_path=output_path_density, show=False)
 
