@@ -188,7 +188,7 @@ def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
     ax.bar(time_days[:-1], n_arriving/n_particles_in_simulation_per_day[:-1]*100, color=color, edgecolor=edgecolor)
 
     ax.set_xlim([time_days[0], time_days[-1]])
-    ax.set_ylabel('Particles moving\npast shelf break (%)')
+    ax.set_ylabel('Particles passing\n shelf break (%)')
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -200,30 +200,41 @@ def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
         return ax
 
 def plot_age_in_deep_sea(particles:Particles, h_deep_sea:float, total_particles=None,
-                         linestyle='-', color='k', label='', age_lim=None,
-                         ax=None, show=True, output_path=None) -> plt.axes:
+                                   color='#1b7931', age_lim=None, color_cumulative='k',
+                                   ax=None, show=True, output_path=None) -> plt.axes:
     if ax is None:
         fig = plt.figure(figsize=(10, 5))
         ax = plt.axes()
         ax.set_xlabel('Particle age (days)')
-        ax.set_ylabel('Fraction in deep sea')
+        ax.set_ylabel('Particles passing shelf break (%)')
         if age_lim is not None:
             ax.set_xlim([0, age_lim])
 
     _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
     n_dim_matrix = len(matrix_arriving_ds.shape)
     if n_dim_matrix == 2:
-        n_deep_sea_per_age = np.cumsum(np.sum(matrix_arriving_ds, axis=0))
+        n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
     elif n_dim_matrix == 1:
-        n_deep_sea_per_age = np.cumsum(matrix_arriving_ds)
+        n_deep_sea_per_age = matrix_arriving_ds
     else:
         raise ValueError(f'You should not be able to get here: matrix_arriving_ds is {n_dim_matrix}D')
-
+    
     if total_particles is None:
         total_particles = particles.lon.shape[0]
-    f_deep_sea_per_age = n_deep_sea_per_age/total_particles # divided by total # particles
+    f_deep_sea_per_age = n_deep_sea_per_age/total_particles*100 # divided by total # particles
+    f_cumulative_per_age = np.cumsum(f_deep_sea_per_age)
 
-    ax.plot(age_arriving_ds, f_deep_sea_per_age, linestyle, color=color, label=label)
+    # histogram age arriving
+    ax.bar(age_arriving_ds, f_deep_sea_per_age, color=color, width=1)
+    ax.spines['left'].set_color(color)
+    ax.tick_params(axis='y', colors=color)
+    ax.yaxis.label.set_color(color)
+
+    # cumulative particles in deep sea
+    ax2 = ax.twinx()
+    ax2.set_ylabel('Cumulative particles\npassing shelf break (%)', color=color_cumulative)
+    ax2.plot(age_arriving_ds, f_cumulative_per_age, color=color_cumulative)
+    ax2.tick_params(axis='y', colors=color_cumulative)
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -349,7 +360,9 @@ if __name__ == '__main__':
     # output_path_histogram = f'{get_dir_from_json("plots")}cwa-perth_histogram_arriving_2017-Mar-Aug.jpg'
     # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea, output_path=output_path_histogram, show=False)
     
-    output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_2017-Mar-Aug.jpg'
-    plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
-                                                    output_path=output_path_density, show=False)
+    # output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_2017-Mar-Aug.jpg'
+    # plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
+    #                                                 output_path=output_path_density, show=False)
 
+    output_path_age = f'{get_dir_from_json("plots")}cwa-perth_age_2017-Mar-Aug.jpg'
+    plot_age_in_deep_sea(particles, h_deep_sea, output_path=output_path_age, show=False)
