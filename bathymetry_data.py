@@ -13,7 +13,8 @@ class BathymetryData:
         self.lat = lat
         self.h = h
 
-    def plot_contours(self, location_info:LocationInfo, ax=None, show=True, color='k') -> plt.axes:
+    def plot_contours(self, location_info:LocationInfo, ax=None, show=True,
+                      color='k', highlight_contour=[300]) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
             ax = plot_basic_map(ax, location_info)
@@ -26,8 +27,9 @@ class BathymetryData:
                         colors=color, linewidths=1, transform=ccrs.PlateCarree())
         ax.clabel(cs, cs.levels, fontsize=8, inline=True, fmt=_fmt)
 
-        cs200 = ax.contour(self.lon, self.lat, self.h, [200],
+        cs_hl = ax.contour(self.lon, self.lat, self.h, highlight_contour,
                            colors='k', linewidths=1.5, transform=ccrs.PlateCarree())
+        ax.clabel(cs_hl, cs_hl.levels, fontsize=10, inline=True, fmt=_fmt)
 
         t = ax.text(114.93, -32.10, 'Perth canyon', va='center', ha='right', transform=ccrs.PlateCarree())
         t.set_bbox(dict(facecolor='w', alpha=0.6, edgecolor='w'))
