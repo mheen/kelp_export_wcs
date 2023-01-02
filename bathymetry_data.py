@@ -1,43 +1,13 @@
 from tools import log
-from location_info import LocationInfo, get_location_info
-from basic_maps import plot_basic_map
 from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
-import cartopy.crs as ccrs
-import matplotlib.pyplot as plt
 
 class BathymetryData:
     def __init__(self, lon, lat, h):
         self.lon = lon
         self.lat = lat
         self.h = h
-
-    def plot_contours(self, location_info:LocationInfo, ax=None, show=True,
-                      color='k', highlight_contour=[300]) -> plt.axes:
-        if ax is None:
-            ax = plt.axes(projection=ccrs.PlateCarree())
-            ax = plot_basic_map(ax, location_info)
-            
-        def _fmt(x):
-            s = f'{x:.0f}'
-            return s
-
-        cs = ax.contour(self.lon, self.lat, self.h, levels=location_info.contour_levels,
-                        colors=color, linewidths=1, transform=ccrs.PlateCarree())
-        ax.clabel(cs, cs.levels, fontsize=8, inline=True, fmt=_fmt)
-
-        cs_hl = ax.contour(self.lon, self.lat, self.h, highlight_contour,
-                           colors='k', linewidths=1.5, transform=ccrs.PlateCarree())
-        ax.clabel(cs_hl, cs_hl.levels, fontsize=10, inline=True, fmt=_fmt)
-
-        t = ax.text(114.93, -32.10, 'Perth canyon', va='center', ha='right', transform=ccrs.PlateCarree())
-        t.set_bbox(dict(facecolor='w', alpha=0.6, edgecolor='w'))
-
-        if show is True:
-            plt.show()
-        else:
-            return ax
 
     def write_roms_bathymetry_to_csv(self, output_path:str):
         
@@ -71,8 +41,3 @@ class BathymetryData:
         netcdf.close()
 
         return BathymetryData(lon, lat, h)
-
-if __name__ == '__main__':
-    bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
-    location_info = get_location_info('cwa_perth')
-    bathymetry.plot_contours(location_info)

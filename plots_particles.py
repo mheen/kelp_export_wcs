@@ -3,6 +3,7 @@ from tools.files import get_dir_from_json
 from tools import log
 from particles import Particles, DensityGrid, get_particle_density
 from bathymetry_data import BathymetryData
+from plots_bathymetry import plot_contours
 from kelp_map import KelpProbability
 from location_info import LocationInfo, get_location_info
 from basic_maps import plot_basic_map
@@ -58,7 +59,8 @@ def animate_particles(particles:Particles, location_info:LocationInfo,
 
     if show_bathymetry is True:
         bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
-        ax = bathymetry.plot_contours(location_info, ax=ax, show=False, color='#757575')
+        ax = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
+                           ax=ax, show=False, color='#757575')
     
     if show_kelp_map is True:
         kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
@@ -305,7 +307,8 @@ def plot_initial_particle_density_entering_deep_sea(particles:Particles, locatio
     cbar = plt.colorbar(c)
     cbar.set_label(f'Percentage particles reaching shelf break per {dx}$^o$ grid cell')
 
-    ax = bathymetry.plot_contours(get_location_info('cwa_perth'), ax=ax, show=False, color='#808080')
+    ax = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
+                       ax=ax, show=False, color='#808080', show_perth_canyon=False, highlight_contour=None)
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')

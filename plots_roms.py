@@ -4,7 +4,7 @@ from tools.coordinates import get_bearing_between_points
 from tools import log
 from roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs
 from roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
-from bathymetry_data import BathymetryData
+from plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
 from basic_maps import plot_basic_map
 import cartopy.crs as ccrs
@@ -269,9 +269,8 @@ def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
     ax2 = plot_roms_map_with_transect(roms_data, location_info, lon1, lat1, lon2, lat2, ds, 'h', roms_data.time[0],
                                       ax=ax2, show=False, clabel='Bathymetry (m)', cmap=cmap, vmin=vmin, vmax=vmax,
                                       color='#e4e4e4')
-    cs = ax2.contour(roms_data.grid.lon, roms_data.grid.lat, roms_data.grid.h, levels=location_info.contour_levels,
-                     colors='k', linewidths=1, transform=ccrs.PlateCarree())
-    ax2.clabel(cs, cs.levels, fontsize=8, inline=True)
+    ax2 = plot_contours(roms_data.grid.lon, roms_data.grid.lat, roms_data.grid.h, location_info,
+                        ax=ax2, show=False)
     
     ax3 = plt.subplot(2, 5, (6, 8))
     ax3.fill_between(distance, -h, -np.nanmax(h), edgecolor='k', facecolor='#989898')
