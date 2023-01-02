@@ -1,4 +1,4 @@
-from tools.timeseries import get_closest_time_index
+from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.files import get_dir_from_json
 from tools import log
 from particles import Particles, DensityGrid, get_particle_density
@@ -8,6 +8,7 @@ from kelp_map import KelpProbability
 from location_info import LocationInfo, get_location_info
 from basic_maps import plot_basic_map
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import matplotlib.animation as animation
 import matplotlib.dates as mdates
 import matplotlib.units as munits
@@ -42,10 +43,12 @@ formatter.offset_formats = ['',
                             '%d %b %Y',
                             '%d %b %Y %H:%M', ]
 
-def animate_particles(particles:Particles, location_info:LocationInfo,
-                      show_bathymetry=True, show_kelp_map=True,
-                      output_path=None, color_p='k',
+def animate_particles(particles:Particles, location_info:LocationInfo, h_deep_sea:float,
+                      show_bathymetry=True, show_kelp_map=False,
+                      output_path=None, color_p='k', color_ds='#1b7931',
                       dpi=100, fps=25):
+
+    l_deep_sea = particles.get_l_deep_sea(h_deep_sea).astype(bool)
 
     writer = animation.PillowWriter(fps=fps)
 
@@ -54,13 +57,14 @@ def animate_particles(particles:Particles, location_info:LocationInfo,
     plt.rcParams.update({'font.family': 'arial'})
     plt.rcParams.update({'figure.dpi': dpi})
     fig = plt.figure(figsize=(10,8))
+    fig.tight_layout()
     ax = plt.axes(projection=ccrs.PlateCarree())
     ax = plot_basic_map(ax, location_info)
 
     if show_bathymetry is True:
         bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
         ax = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
-                           ax=ax, show=False, color='#757575')
+                           highlight_contour=[h_deep_sea], ax=ax, show=False, color='#757575')
     
     if show_kelp_map is True:
         kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
@@ -68,6 +72,14 @@ def animate_particles(particles:Particles, location_info:LocationInfo,
 
     # animated points
     point = ax.plot([], [], 'o', color=color_p, markersize=2, zorder=2)[0]
+    point_ds = ax.plot([], [], 'o', color=color_ds, markersize=2, zorder=3)[0]
+    
+    # legend
+    legend_elements = [Line2D([0],[0], marker='o', color='w', markerfacecolor=color_p, markersize=10,
+                       label='Coastal region'),
+                       Line2D([0], [0], marker='o', color='w', markerfacecolor=color_ds, markersize=10,
+                       label='Past shelf break')]
+    ax.legend(handles=legend_elements, loc='upper left')
 
     # animated text
     ttl = ax.text(0.5, 1.04,'', transform=ax.transAxes,
@@ -76,16 +88,19 @@ def animate_particles(particles:Particles, location_info:LocationInfo,
     ttl.set_animated(True)
     
     def init():
-        point.set_data([],[])
+        point.set_data([], [])
+        point_ds.set_data([], [])
         ttl.set_text('')
-        return point, ttl
+        return point, point_ds, ttl
 
-    def animate(i):        
-        x, y = (particles.lon[:,i], particles.lat[:,i])
-        point.set_data(x,y)
-        title = particles.time[i].strftime('%d-%m-%Y %H:%M')
+    def animate(i):
+        x, y = (particles.lon[~l_deep_sea[:, i], i], particles.lat[~l_deep_sea[:, i], i])
+        point.set_data(x, y)
+        x_ds, y_ds = (particles.lon[l_deep_sea[:, i], i], particles.lat[l_deep_sea[:, i], i])
+        point_ds.set_data(x_ds, y_ds)
+        title = particles.time[i].strftime('%d %b %Y %H:%M')
         ttl.set_text(title)
-        return point, ttl
+        return point, point_ds, ttl
 
     anim = animation.FuncAnimation(plt.gcf(), animate, init_func=init, frames=len(particles.time), blit=True)
     if output_path is not None:
@@ -321,16 +336,16 @@ def plot_initial_particle_density_entering_deep_sea(particles:Particles, locatio
 
 if __name__ == '__main__':
     location_info = get_location_info('cwa_perth')
-    h_deep_sea = 500 # m depth: edge of continental shelf
+    h_deep_sea = 600 # m depth: max Leeuwin Undercurrent depth
 
     input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
     particles = Particles.read_from_netcdf(input_path)
     
-    # animation_path = f'{get_dir_from_json("plots")}animation_cwa-perth_2017-Mar-Aug.gif'
-    # animate_particles(particles, location_info, output_path=animation_path)
+    animation_path = f'{get_dir_from_json("plots")}cwa-perth_animation_2017-Mar-Aug.gif'
+    animate_particles(particles, location_info, h_deep_sea, output_path=animation_path)
 
     # plot_particle_locations(particles, location_info, t=0)
 
     # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea)
-    plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea)
+    # plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea)
 
