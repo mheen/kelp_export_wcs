@@ -110,7 +110,8 @@ if __name__ == '__main__':
     location_info = get_location_info('cwa_perth_zoom')
     bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
     
-    plt.rcParams.update({'font.size' : 15})
+    plt.rcParams.update({'font.size' : 20})
     output_path = f'{get_dir_from_json("plots")}cwa-perth-zoom_bathymetry.jpg'
     _ = plot_bathymetry_and_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
-                                     show=False, output_path=output_path, vmin=0, vmax=4000)
+                                     show=False, output_path=output_path, vmin=0, vmax=4000,
+                                     contour_fontsize=17)
