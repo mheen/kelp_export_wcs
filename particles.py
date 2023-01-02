@@ -88,15 +88,19 @@ class Particles:
 
         return Particles(self.time, status, lon, lat, z, salt, temp, age)
 
-    def get_l_deep_sea(self, h_deep_sea:float) -> np.ndarray:
-        i_ds, j_ds = np.where(self.z <= -h_deep_sea)
-        l_deep_sea = np.zeros(self.z.shape)
-        for k in range(len(i_ds)):
-            # once particles in deep sea, they will remain there
-            # (stops particles that move out of simulation domain
-            # from being removed from deep sea count)
-            # IMPORTANT: this may need to change
-            l_deep_sea[i_ds[k], j_ds[k]:] = 1
+    def get_l_deep_sea(self, h_deep_sea:float, remain=False) -> np.ndarray:
+        
+        if remain is True:
+            i_ds, j_ds = np.where(self.z <= -h_deep_sea)
+            l_deep_sea = np.zeros(self.z.shape)
+            for k in range(len(i_ds)):
+                # once particles in deep sea, they will remain there
+                # (stops particles that move out of simulation domain
+                # from being removed from deep sea count)
+                l_deep_sea[i_ds[k], j_ds[k]:] = 1
+            return l_deep_sea
+
+        l_deep_sea = self.z <= -h_deep_sea # particles can move into deep sea and then out again
 
         return l_deep_sea
 
