@@ -1,9 +1,10 @@
-from tools.timeseries import convert_time_to_datetime
+from tools.timeseries import convert_time_to_datetime, get_l_time_range
 from tools import log
 from dataclasses import dataclass
 from netCDF4 import Dataset
 import numpy as np
 from warnings import warn
+from datetime import datetime
 
 class Particles:
     def __init__(self, time:np.ndarray,
@@ -15,15 +16,15 @@ class Particles:
                  temp:np.ndarray,
                  age:np.ndarray):
         self.time = time
-        self.status = status # 0: active, 1: stranded, -999: not active yet or out of domain
+        self.status = status # [trajectory, time] # 0: active, 1: stranded, -999: not active yet or out of domain
         self.lon = lon # [trajectory, time]
         self.lat = lat # [trajectory, time]
         self.z = z # [trajectory, time]
 
-        self.salt = salt
-        self.temp = temp
+        self.salt = salt # [trajectory, time]
+        self.temp = temp # [trajectory, time]
         
-        self.age = age # [days]
+        self.age = age # [trajectory, time] (days)
 
         self.add_initial_positions()
 
@@ -40,6 +41,20 @@ class Particles:
         self.lon0 = np.array(self.lon0)
         self.lat0 = np.array(self.lat0)
         self.z0 = np.array(self.z0)
+
+    def get_particles_in_time_range(self, start_time:datetime, end_time:datetime):
+        l_time = get_l_time_range(self.time, start_time, end_time)
+        time = np.copy(self.time[l_time])
+        # remove particles that are not released within time range
+        l_released = ~np.all(np.isnan(self.lon[:, l_time]), axis=1)
+        status = np.copy(self.status[l_released, :][:, l_time])
+        lon = np.copy(self.lon[l_released, :][:, l_time])
+        lat = np.copy(self.lat[l_released, :][:, l_time])
+        z = np.copy(self.z[l_released, :][:, l_time])
+        salt = np.copy(self.salt[l_released, :][:, l_time])
+        temp = np.copy(self.temp[l_released, :][:, l_time])
+        age = np.copy(self.age[l_released, :][:, l_time])
+        return Particles(time, status, lon, lat, z, salt, temp, age)
 
     def filter_based_on_release_depth(self, h_min:float, h_max:float):
         l_depth = np.logical_and(self.z0<-h_min, self.z0>=-h_max)
