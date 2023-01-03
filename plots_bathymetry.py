@@ -114,4 +114,4 @@ if __name__ == '__main__':
     output_path = f'{get_dir_from_json("plots")}cwa-perth-zoom_bathymetry.jpg'
     _ = plot_bathymetry_and_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
                                      show=False, output_path=output_path, vmin=0, vmax=4000,
-                                     contour_fontsize=17)
+                                     contour_fontsize=17, cmap='viridis_r')
