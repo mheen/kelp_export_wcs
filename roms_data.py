@@ -1,6 +1,7 @@
 from tools.files import get_daily_files_in_time_range
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points
+from tools.arrays import get_closest_index
 from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
@@ -93,14 +94,21 @@ def read_roms_grid_from_netcdf(input_path:str) -> RomsGrid:
 
     return RomsGrid(lon_rho, lat_rho, s_rho, angle, h, z)
 
-def get_subgrid(grid:RomsGrid, lon_range:list, lat_range:list) -> RomsGrid:
+def get_subgrid(grid:RomsGrid, lon_range:list, lat_range:list, s_range:list) -> RomsGrid:
     i0, i1, j0, j1 = bbox2ij(grid.lon, grid.lat, [lon_range[0], lon_range[1], lat_range[0], lat_range[1]])
+
+    s0 = None
+    s1 = None
+    if s_range is not None:
+        s0 = s_range[0]
+        s1 = s_range[1]
 
     lon = grid.lon[j0:j1, i0:i1]
     lat = grid.lat[j0:j1, i0:i1]
+    s = grid.s[s0:s1]
     angle = grid.angle[j0:j1, i0:i1]
     h = grid.h[j0:j1, i0:i1]
-    z = grid.z[j0:j1, i0:i1]
+    z = grid.z[s0:s1, j0:j1, i0:i1]
 
     return RomsGrid(lon, lat, grid.s, angle, h, z)
     
@@ -156,17 +164,32 @@ class RomsData:
     temp: np.ndarray
     salt: np.ndarray
 
-def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
-    grid = read_roms_grid_from_netcdf(input_path)
+def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list, s_range:list) -> tuple:
+    full_grid = read_roms_grid_from_netcdf(input_path)
 
-    if lon_range and lat_range is not None: # WRONG: lon and lat range can't be selected yet for u and v (not in rho points yet)
-        i0, i1, j0, j1 = bbox2ij(grid.lon, grid.lat, [lon_range[0], lon_range[1], lat_range[0], lat_range[1]])
-        grid = get_subgrid(grid, lon_range, lat_range)
+    i0 = None
+    i1 = None
+    j0 = None
+    j1 = None
+    if lon_range is not None:
+        i0 = get_closest_index(full_grid.lon[0, :], lon_range[0])
+        if lon_range[1] == lon_range[0]:
+            i1 = i0+1
+        else:
+            i1 = get_closest_index(full_grid.lon[0, :], lon_range[1])
+    if lat_range is not None:
+        j0 = get_closest_index(full_grid.lat[:, 0], lat_range[0])
+        if lat_range[1] == lat_range[0]:
+            j1 = j0+1
+        else:
+            j1 = get_closest_index(full_grid.lat[:, 0], lat_range[1])
+
+    if s_range is not None:
+        s0 = s_range[0] # consider selecting depths instead of s indices?
+        s1 = s_range[-1]
     else:
-        i0 = None
-        i1 = None
-        j0 = None
-        j1 = None
+        s0 = None
+        s1 = None
 
     nc = Dataset(input_path)
 
@@ -185,20 +208,36 @@ def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, t
 
     time = time[t0:t1]
 
-    temp = nc['temp'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
-    salt = nc['salt'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
+    temp = nc['temp'][t0:t1, s0:s1, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
+    salt = nc['salt'][t0:t1, s0:s1, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
 
-    u = nc['u'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
-    v = nc['v'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
+    # read in full u and v first, then select lon and lat range after conversion to u_east and v_north
+    # ugly and slow way of doing this: figure out how to select correct ranges for u and v
+    u = nc['u'][t0:t1, s0:s1, :, :].filled(fill_value=np.nan) # [time, s, eta, xi]
+    v = nc['v'][t0:t1, s0:s1, :, :].filled(fill_value=np.nan) # [time, s, eta, xi]
 
     nc.close()
 
-    u_east, v_north = convert_roms_u_v_to_u_east_v_north(u, v, grid.angle)
+    u_east, v_north = convert_roms_u_v_to_u_east_v_north(u, v, full_grid.angle)
+    u_east = u_east[:, :, j0:j1, i0:i1]
+    v_north = v_north[:, :, j0:j1, i0:i1]
+
+    lon = full_grid.lon[j0:j1, i0:i1]
+    lat = full_grid.lat[j0:j1, i0:i1]
+    s = full_grid.s[s0:s1]
+    angle = full_grid.angle[j0:j1, i0:i1]
+    h = full_grid.h[j0:j1, i0:i1]
+    z = full_grid.z[s0:s1, j0:j1, i0:i1]
+    grid = RomsGrid(lon, lat, s, angle, h, z)
 
     return time, grid, u_east, v_north, temp, salt
 
-def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
-    time, grid, u_east, v_north, temp, salt = _get_roms_data_from_netcdf(input_path, lon_range, lat_range, time_range)
+def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None, s_range=None) -> RomsData:
+    time, grid, u_east, v_north, temp, salt = _get_roms_data_from_netcdf(input_path,
+                                                                         lon_range,
+                                                                         lat_range,
+                                                                         time_range,
+                                                                         s_range)
 
     return RomsData(time, grid, u_east, v_north, temp, salt)
 
