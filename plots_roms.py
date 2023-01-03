@@ -84,7 +84,7 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
     lat = roms_data.grid.lat[eta, xi]
 
     ax = plot_roms_map(roms_data, location_info, parameter, time, s=s, ax=ax, show=False, cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
-    ax.plot(lon, lat, '-', color=color, label='ROMS transect')
+    ax.plot(lon, lat, '-', color=color, label='Transect')
 
     ax.legend(loc='upper left')
 
