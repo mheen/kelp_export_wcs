@@ -63,6 +63,10 @@ class RomsGrid:
         return lon_range, lat_range
 
     def get_eta_xi_of_lon_lat_point(self, lon_p:np.ndarray, lat_p:np.ndarray) -> tuple:
+        if type(lon_p) is float:
+            lon_p = [lon_p]
+        if type(lat_p) is float:
+            lat_p = [lat_p]
         etas = []
         xis = []
         for i in range(len(lon_p)):
@@ -155,7 +159,7 @@ class RomsData:
 def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
     grid = read_roms_grid_from_netcdf(input_path)
 
-    if lon_range and lat_range is not None:
+    if lon_range and lat_range is not None: # WRONG: lon and lat range can't be selected yet for u and v (not in rho points yet)
         i0, i1, j0, j1 = bbox2ij(grid.lon, grid.lat, [lon_range[0], lon_range[1], lat_range[0], lat_range[1]])
         grid = get_subgrid(grid, lon_range, lat_range)
     else:
