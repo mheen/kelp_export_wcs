@@ -14,6 +14,19 @@ class KelpProbability:
         self.lat = lat
         self.prob = probability
 
+    def get_kelp_probability_at_point(self, lon_p:np.ndarray, lat_p:np.ndarray) -> np.ndarray:
+        dx = np.unique(np.diff(self.lon[0, :]))[0]
+        dy = np.unique(abs(np.diff(self.lat[:, 0])))[0]
+        lon_index = np.floor((lon_p-np.nanmin(self.lon))*1/dx)
+        lon_index[lon_index>=self.lon.shape[1]] = np.nan
+        lon_index[lon_index<0] = np.nan
+        
+        lat_index = np.floor((lat_p-np.nanmin(self.lat))*1/dy)
+        lat_index[lat_index>=self.lat.shape[0]] = np.nan
+        lat_index[lat_index<0] = np.nan
+
+        return self.prob[lat_index.astype(int), lon_index.astype(int)]
+        
     def plot(self, location_info:LocationInfo, ax=None, show=True, output_path=None, probability_threshold=0.) -> plt.axes:
         if ax is None:
             ax = plt.axes(projection=ccrs.PlateCarree())
@@ -81,3 +94,10 @@ def get_kelp_coordinates(input_path:str, probability_threshold=0.8) -> tuple:
     lon, lat = rasterio.transform.xy(dataset.transform, i_kelp[0], i_kelp[1], offset='center')
 
     return np.array(lon), np.array(lat)
+
+if __name__ == '__main__':
+    kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+    lon = np.array([115.24, 115.55, 115.80])
+    lat = np.array([-32.49, -32.50, -32.60])
+
+    kelp_prob.get_kelp_probability_at_point(lon, lat)

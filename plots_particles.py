@@ -304,7 +304,8 @@ def plot_particle_locations(particles:Particles, location_info:LocationInfo,
 def plot_initial_particle_density_entering_deep_sea(particles:Particles, location_info:LocationInfo,
                                                     h_deep_sea:float, dx=0.01,
                                                     ax=None, show=True, output_path=None,
-                                                    cmap='plasma', vmin=None, vmax=None):
+                                                    cmap='plasma', vmin=None, vmax=None,
+                                                    filter_kelp_prob=None):
     
     bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
 
@@ -314,6 +315,17 @@ def plot_initial_particle_density_entering_deep_sea(particles:Particles, locatio
     lat0_ds = particles.lat0[l_deep_sea_any_time]
     lon0_nds = particles.lon0[~l_deep_sea_any_time]
     lat0_nds = particles.lat0[~l_deep_sea_any_time]
+
+    if filter_kelp_prob is not None:
+        kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+        kelp_prob_ds = kelp_prob.get_kelp_probability_at_point(lon0_ds, lat0_ds)
+        kelp_prob_nds = kelp_prob.get_kelp_probability_at_point(lon0_nds, lat0_nds)
+        l_kelp_ds = kelp_prob_ds>=filter_kelp_prob
+        l_kelp_nds = kelp_prob_nds>=filter_kelp_prob
+        lon0_ds = lon0_ds[l_kelp_ds]
+        lat0_ds = lat0_ds[l_kelp_ds]
+        lon0_nds = lon0_nds[l_kelp_nds]
+        lat0_nds = lat0_nds[l_kelp_nds]
 
     grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
     density_ds = get_particle_density(grid, lon0_ds, lat0_ds)
@@ -360,9 +372,9 @@ if __name__ == '__main__':
     # output_path_histogram = f'{get_dir_from_json("plots")}cwa-perth_histogram_arriving_2017-Mar-Aug.jpg'
     # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea, output_path=output_path_histogram, show=False)
     
-    # output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_2017-Mar-Aug.jpg'
-    # plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
-    #                                                 output_path=output_path_density, show=False)
+    output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_p80_2017-Mar-Aug.jpg'
+    plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
+                                                    output_path=output_path_density, show=False, filter_kelp_prob=0.8)
 
-    output_path_age = f'{get_dir_from_json("plots")}cwa-perth_age_2017-Mar-Aug.jpg'
-    plot_age_in_deep_sea(particles, h_deep_sea, output_path=output_path_age, show=False)
+    # output_path_age = f'{get_dir_from_json("plots")}cwa-perth_age_2017-Mar-Aug.jpg'
+    # plot_age_in_deep_sea(particles, h_deep_sea, output_path=output_path_age, show=False)
