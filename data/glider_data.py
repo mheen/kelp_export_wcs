@@ -1,10 +1,14 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range
 from tools.files import get_dir_from_json
 from location_info import LocationInfo
-from seawater_density import calculate_density
+from tools.seawater_density import calculate_density
 from gridfit import gridfit
 from ext.peak_detect import peak_detect
-from basic_maps import plot_basic_map
+from plot_tools.basic_maps import plot_basic_map
 from netCDF4 import Dataset
 import numpy as np
 import cartopy.crs as ccrs

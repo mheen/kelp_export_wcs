@@ -3,8 +3,8 @@ from tools.timeseries import add_month_to_time
 from tools import log
 from readers import reader_ROMS
 from models.opendrift_bottomdrifters import BottomDrifters
-from bathymetry_data import BathymetryData
-from kelp_map import generate_random_releases_based_on_probability
+from data.bathymetry_data import BathymetryData
+from data.kelp_data import generate_random_releases_based_on_probability
 from datetime import datetime, timedelta
 import numpy as np
 import sys

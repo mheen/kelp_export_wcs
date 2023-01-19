@@ -1,12 +1,16 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.files import get_dir_from_json
 from tools import log
 from particles import Particles, DensityGrid, get_particle_density
-from bathymetry_data import BathymetryData
-from plots_bathymetry import plot_contours
-from kelp_map import KelpProbability
+from data.bathymetry_data import BathymetryData
+from plot_tools.plots_bathymetry import plot_contours
+from data.kelp_data import KelpProbability
 from location_info import LocationInfo, get_location_info
-from basic_maps import plot_basic_map
+from plot_tools.basic_maps import plot_basic_map
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import matplotlib.animation as animation

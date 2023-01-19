@@ -1,8 +1,12 @@
-from satellite_data import SatelliteSST, read_satellite_sst_from_netcdf, get_monthly_mean_sst
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
+from data.satellite_data import SatelliteSST, read_satellite_sst_from_netcdf, get_monthly_mean_sst
 from tools.files import get_dir_from_json
 from tools import log
 from location_info import LocationInfo, get_location_info
-from basic_maps import plot_basic_map
+from plot_tools.basic_maps import plot_basic_map
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import numpy as np

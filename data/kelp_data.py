@@ -1,6 +1,10 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools import log
 from location_info import LocationInfo
-from basic_maps import plot_basic_map
+from plot_tools.basic_maps import plot_basic_map
 import rasterio
 import numpy as np
 import cartopy.crs as ccrs

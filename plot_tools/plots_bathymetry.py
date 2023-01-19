@@ -1,8 +1,12 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools.files import get_dir_from_json
 from tools import log
 from location_info import LocationInfo, get_location_info
-from basic_maps import plot_basic_map
-from bathymetry_data import BathymetryData
+from plot_tools.basic_maps import plot_basic_map
+from data.bathymetry_data import BathymetryData
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable

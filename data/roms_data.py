@@ -1,3 +1,7 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools.files import get_daily_files_in_time_range
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points

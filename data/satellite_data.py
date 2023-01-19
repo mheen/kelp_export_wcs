@@ -1,3 +1,7 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time
 from tools.files import get_dir_from_json
 from tools import log

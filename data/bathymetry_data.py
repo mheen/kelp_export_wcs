@@ -1,3 +1,7 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools import log
 from netCDF4 import Dataset
 import numpy as np

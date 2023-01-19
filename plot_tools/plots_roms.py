@@ -1,12 +1,16 @@
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
 from tools.files import get_dir_from_json
 from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.coordinates import get_bearing_between_points
 from tools import log
-from roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs
-from roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
-from plots_bathymetry import plot_contours
+from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs
+from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
+from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
-from basic_maps import plot_basic_map
+from plot_tools.basic_maps import plot_basic_map
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
