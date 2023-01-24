@@ -203,9 +203,99 @@ def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
     else:
         return ax
 
+def plot_percentage_in_deep_sea_depending_on_depth(particles:Particles, h_deep_sea_sensitivity=np.arange(200, 6000, 100),
+                                                   color_age='#1b7931', color_p='k',
+                                                   ax=None, show=True, output_path=None) -> plt.axes:
+    if ax is None:
+        fig = plt.figure(figsize=(10, 5))
+        ax = plt.axes()
+        ax.set_xlabel('Depth (m)')
+        ax.set_ylabel('Total particles\npassing depth range (%)')
+
+    p_deep_sea = []
+    age_80_percent = []
+    for h_deep_sea in h_deep_sea_sensitivity:
+        _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
+        n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
+        total_particles = particles.lon.shape[0]
+        f_deep_sea_per_age = n_deep_sea_per_age/total_particles*100 # divided by total # particles
+        f_cumulative_per_age = np.cumsum(f_deep_sea_per_age)
+
+        p_deep_sea.append(f_cumulative_per_age[-1])
+
+        if f_cumulative_per_age[-1] != 0:
+            i_80 = np.where(f_cumulative_per_age>=f_cumulative_per_age[-1]*0.8)[0][0]
+            age_80_percent.append(age_arriving_ds[i_80])
+        else:
+            age_80_percent.append(np.nan)
+
+    ax.plot(h_deep_sea_sensitivity, p_deep_sea, color=color_p)
+    ax.set_xticks([200, 600, 1000, 2000, 3000, 4000, 5000, 6000])
+    ax.set_xlim([h_deep_sea_sensitivity[0], h_deep_sea_sensitivity[-1]])
+    ax.set_ylim([0, 100])
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+    ax2 = ax.twinx()
+    ax2.set_ylabel('Age when >80% particles\npass depth range (days)', color=color_age)
+    ax2.plot(h_deep_sea_sensitivity, age_80_percent, color=color_age)
+    ax2.set_yticks([0, 30, 60, 90, 120, 150])
+    ax2.tick_params(axis='y', colors=color_age)
+    ax2.set_ylim([0, 150])
+    
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
+def _plot_age_in_deep_sea_cumulative_only(ax, particles:Particles, h_deep_sea:float,
+                                         color='k', linestyle='-', label='') -> plt.axes:
+
+    _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
+    n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
+    total_particles = particles.lon.shape[0]
+    f_deep_sea_per_age = n_deep_sea_per_age/total_particles*100 # divided by total # particles
+    f_cumulative_per_age = np.cumsum(f_deep_sea_per_age)
+
+    ax.plot(age_arriving_ds, f_cumulative_per_age, color=color, linestyle=linestyle, label=label)
+
+    return ax
+
+def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
+                                                     h_deep_sea_sensitivity=[200, 400, 600, 800, 1000, 2500, 5000],
+                                                     colors = ['#1b7931', '#1c642a', '#1a5023', '#183d1d', '#142a16', '#0e190e', '#000000'],
+                                                     linestyles = ['--', ':', '-', '-.', '--', ':', '-'],
+                                                     output_path=None, show=True) -> plt.axes:
+    
+    labels = h_deep_sea_sensitivity
+
+    fig = plt.figure(figsize=(10, 5))
+    ax = plt.axes()
+    for i, h in enumerate(h_deep_sea_sensitivity):
+        ax = _plot_age_in_deep_sea_cumulative_only(ax, particles, h, color=colors[i], linestyle=linestyles[i], label=labels[i])
+    ax.set_xlim([0, 150])
+    ax.set_xlabel('Particle age (days)')
+    ax.set_ylim([0, 100])
+    ax.set_ylabel('Cumulative particles\npassing depth range (%)')
+    ax.grid(True, linestyle='--', alpha=0.5)
+    
+    ax.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
+    
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
 def plot_age_in_deep_sea(particles:Particles, h_deep_sea:float, total_particles=None,
-                                   color='#1b7931', age_lim=None, color_cumulative='k',
-                                   ax=None, show=True, output_path=None) -> plt.axes:
+                         color='#1b7931', age_lim=None, color_cumulative='k',
+                         ax=None, show=True, output_path=None) -> plt.axes:
     if ax is None:
         fig = plt.figure(figsize=(10, 5))
         ax = plt.axes()
@@ -376,9 +466,16 @@ if __name__ == '__main__':
     # output_path_histogram = f'{get_dir_from_json("plots")}cwa-perth_histogram_arriving_2017-Mar-Aug.jpg'
     # plot_histogram_arriving_in_deep_sea(particles, h_deep_sea, output_path=output_path_histogram, show=False)
     
-    output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_p80_2017-Mar-Aug.jpg'
-    plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
-                                                    output_path=output_path_density, show=False, filter_kelp_prob=0.8)
+    # output_path_density = f'{get_dir_from_json("plots")}cwa-perth_initial_density_p80_2017-Mar-Aug.jpg'
+    # plot_initial_particle_density_entering_deep_sea(particles, get_location_info('perth'), h_deep_sea,
+    #                                                 output_path=output_path_density, show=False, filter_kelp_prob=0.8)
 
     # output_path_age = f'{get_dir_from_json("plots")}cwa-perth_age_2017-Mar-Aug.jpg'
     # plot_age_in_deep_sea(particles, h_deep_sea, output_path=output_path_age, show=False)
+
+    output_path_sensitivity = f'{get_dir_from_json("plots")}cwa-perth_deep_sea_sensitivity_2017-Mar-Aug.jpg'
+    plot_percentage_in_deep_sea_depending_on_depth(particles, output_path=output_path_sensitivity, show=False)
+
+    output_path_sensitivity_age = f'{get_dir_from_json("plots")}cwa-perth_deep_sea_age_sensitivity_2017-Mar-Aug.jpg'
+    plot_particle_age_in_deep_sea_depending_on_depth(particles, output_path=output_path_sensitivity_age, show=False)
+    
