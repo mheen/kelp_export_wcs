@@ -112,7 +112,7 @@ class Particles:
         return p_arriving_ds, t_arriving_ds
 
     def get_n_deep_sea(self, h_deep_sea:float) -> np.ndarray:
-        l_deep_sea = self.get_l_deep_sea(h_deep_sea)
+        l_deep_sea = self.get_l_deep_sea(h_deep_sea, remain=True)
         n_deep_sea = np.sum(l_deep_sea, axis=0)
         return n_deep_sea
 
@@ -135,7 +135,8 @@ class Particles:
         age_bins, i_age_arriving_ds = self.bin_age_arriving_in_deep_sea(h_deep_sea)
 
         matrix_arriving_ds = np.zeros((len(unique_t_release), len(age_bins)))
-        np.add.at(matrix_arriving_ds, (i_unique_t_release, i_age_arriving_ds), 1)
+        if len(i_age_arriving_ds)!=0 and len(i_unique_t_release)!=0:
+            np.add.at(matrix_arriving_ds, (i_unique_t_release, i_age_arriving_ds), 1)
 
         return self.time[unique_t_release], age_bins, matrix_arriving_ds
 
