@@ -2,11 +2,11 @@ import os, sys
 parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
-from tools.files import get_dir_from_json
+from tools.files import get_dir_from_json, get_daily_files_in_time_range
 from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.coordinates import get_bearing_between_points
 from tools import log
-from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs
+from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs, read_roms_data_from_netcdf
 from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
 from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 from datetime import datetime, timedelta
+import pandas as pd
 
 def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
                   parameter:str, time:datetime, s=-1, # default: surface
@@ -290,23 +291,87 @@ def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
     if show is True:
         plt.show()
 
-if __name__ == '__main__':
-    location_info = get_location_info('perth')
-    input_dir = f'{get_dir_from_json("roms_data")}2022/'
-    start_date = datetime(2022, 7, 1)
-    end_date = datetime(2022, 7, 10)
-    roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
-    
-    lon1 = 115.70
-    lat1 = -31.76
-    lon2 = 115.26
-    lat2 = -31.95
-    ds = 500
+def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_date:datetime,
+                                       thres_vel:float, thres_sd:float, thres_name:str, s=0, # bottom layer
+                                       color='#346ca7', edgecolor='none',
+                                       ax=None, show=True, output_path=None):
 
-    mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
-    output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
-    plot_roms_map_with_transect(roms, location_info, lon1, lat1, lon2, lat2, ds, 'temp', mid_date,
-                                vmin=18, vmax=22, clabel='Temperature ($^o$C)', output_path=output_path_map, show=False)
+    vel_bins = np.arange(0, 1.5, 0.01)
+    n_vel = np.zeros(len(vel_bins)-1)
+
+    ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
+
+    for ncfile in ncfiles:
+        roms_data = read_roms_data_from_netcdf(ncfile)
+
+        u = roms_data.u_east[:, s, :, :]
+        v = roms_data.v_north[:, s, :, :]
+        vel = np.sqrt(u**2+v**2)
+
+        n_vel_single, _ = np.histogram(vel[~np.isnan(vel)], bins=vel_bins)
+
+        n_vel += n_vel_single
+
+    if ax is None:
+        fig = plt.figure(figsize=(10, 5))
+        ax = plt.axes()
+
+    ax.bar(vel_bins[:-1], n_vel, color=color, edgecolor=edgecolor, align='edge', width=0.01)
+    ax.set_xlabel('Velocity (m/s)')
+    ax.set_ylabel('Occurrence')
+
+    ylim = ax.get_ylim()
+    ax.plot([thres_vel, thres_vel], ylim, '--k')
+    ax.fill_betweenx(ylim, thres_vel-thres_sd, thres_vel+thres_sd, color='#808080', alpha=0.3)
+    ax.text(thres_vel, -10, thres_name, rotation=90, va='top', ha='center')
+    ax.set_ylim(ylim)
+    ax.set_xlim([vel_bins[0], vel_bins[-2]])
+
+    # percentage exceedance
+    i_exceed = np.where(vel_bins>thres_vel)[0][0]
+    p_exceed = np.sum(n_vel[i_exceed:])/np.sum(n_vel)*100
+    ax.text(0.4, ylim[-1]/2, f'{p_exceed:0.0f} %', color='k', fontsize=20)
+
+    ax.set_title(f'Exceedance of threshold velocity ({start_date.strftime("%b")}-{end_date.strftime("%b %Y")})')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
+if __name__ == '__main__':
+    input_dir = f'{get_dir_from_json("roms_data")}2017/'
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 8, 1)
+    # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
+
+    thres_vels = 0.045#, 0.031]
+    thres_sds = 0.016#, 0.015]
+    thres_names = 'Ecklonia'#, 'Ecklonia (medium)']
+    time_str = f'{start_date.year}-{start_date.strftime("%b")}-{end_date.strftime("%b")}'
+    output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_{time_str}.jpg'
+    plot_exceedance_threshold_velocity(input_dir, start_date, end_date, thres_vels, thres_sds, thres_names, output_path=output_path, show=False)
+
+    # location_info = get_location_info('perth')
+    # input_dir = f'{get_dir_from_json("roms_data")}2022/'
+    # start_date = datetime(2022, 7, 1)
+    # end_date = datetime(2022, 7, 10)
+    # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
+    
+    # lon1 = 115.70
+    # lat1 = -31.76
+    # lon2 = 115.26
+    # lat2 = -31.95
+    # ds = 500
+
+    # mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
+    # output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
+    # plot_roms_map_with_transect(roms, location_info, lon1, lat1, lon2, lat2, ds, 'temp', mid_date,
+    #                             vmin=18, vmax=22, clabel='Temperature ($^o$C)', output_path=output_path_map, show=False)
     
     # output_path_animation = f'{get_dir_from_json("plots")}roms_dswc_temperature_animation_{start_date.strftime("%b-%Y")}.gif'
     # animate_roms_transect(roms, lon1, lat1, lon2, lat2, ds, 'temp', start_date, end_date+timedelta(days=1), output_path=output_path_animation,
