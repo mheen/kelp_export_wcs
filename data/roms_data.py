@@ -6,6 +6,7 @@ from tools.files import get_daily_files_in_time_range
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points
 from tools.arrays import get_closest_index
+from tools import log
 from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
@@ -188,6 +189,7 @@ def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, t
         else:
             j1 = get_closest_index(full_grid.lat[:, 0], lat_range[1])
 
+    log.info(f'Reading ROMS data from {input_path}')
     nc = Dataset(input_path)
 
     time_org = nc['ocean_time'][:].filled(fill_value=np.nan)
