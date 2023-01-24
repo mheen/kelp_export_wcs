@@ -1,6 +1,6 @@
 from tools import log
 from tools.files import get_dir_from_json, get_daily_files_in_time_range
-from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_daily_means
+from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_daily_means, get_closest_time_index
 from plot_tools.basic_maps import plot_basic_map
 from location_info import LocationInfo, get_location_info
 from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea
@@ -15,6 +15,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.units as munits
+import matplotlib.animation as animation
+from matplotlib.lines import Line2D
 import cartopy.crs as ccrs
 from datetime import date, datetime, timedelta
 import numpy as np
@@ -237,16 +239,94 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
     else:
         return ax
 
+# THIS ANIMATION ONLY WORKS IF THE OUTPUT TIMES OF PARTICLES IS THE SAME AS THAT OF ROMS!!!
+def animate_particles_with_roms_field(particles:Particles, roms_input_dir:str,
+                                      location_info:LocationInfo, h_deep_sea:float,
+                                      parameter='temp', s=0,
+                                      cmap='RdBu_r', clabel='Bottom temperature ($^o$C)', vmin=18, vmax=22,
+                                      show_bathymetry=True, show_kelp_map=False,
+                                      output_path=None, color_p='k', color_ds='#1b7931',
+                                      dpi=100, fps=10):
+    
+    roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+
+    l_deep_sea = particles.get_l_deep_sea(h_deep_sea).astype(bool)
+
+    writer = animation.PillowWriter(fps=fps)
+
+    # plot map
+    plt.rcParams.update({'font.size' : 15})
+    plt.rcParams.update({'font.family': 'arial'})
+    plt.rcParams.update({'figure.dpi': dpi})
+    fig = plt.figure(figsize=(10,8))
+    fig.tight_layout()
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    ax = plot_basic_map(ax, location_info)
+
+    if show_bathymetry is True:
+        bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
+        ax = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info,
+                           highlight_contour=[h_deep_sea], ax=ax, show=False, color='#757575', show_perth_canyon=False)
+    
+    if show_kelp_map is True:
+        kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+        ax = kelp_prob.plot(location_info, ax=ax, show=False)
+
+    # animated points
+    point = ax.plot([], [], 'o', color=color_p, markersize=2, zorder=2)[0]
+    point_ds = ax.plot([], [], 'o', color=color_ds, markersize=2, zorder=3)[0]
+    # animated field
+    field = ax.pcolormesh(roms_grid.lon, roms_grid.lat, np.zeros(roms_grid.lon.shape), cmap=cmap, vmin=vmin, vmax=vmax)
+    cbar = plt.colorbar(field)
+    cbar.set_label(clabel)
+    
+    # legend
+    legend_elements = [Line2D([0],[0], marker='o', color='w', markerfacecolor=color_p, markersize=10,
+                       label='Coastal region'),
+                       Line2D([0], [0], marker='o', color='w', markerfacecolor=color_ds, markersize=10,
+                       label='Past shelf break')]
+    ax.legend(handles=legend_elements, loc='upper left')
+
+    # animated text
+    ttl = ax.text(0.5, 1.04, '', transform=ax.transAxes,
+                ha='center', va='top',
+                bbox=dict(facecolor='w', alpha=0.3, edgecolor='w', pad=2))
+    ttl.set_animated(True)
+
+    def animate(i):
+        x, y = (particles.lon[~l_deep_sea[:, i], i], particles.lat[~l_deep_sea[:, i], i])
+        point.set_data(x, y)
+        x_ds, y_ds = (particles.lon[l_deep_sea[:, i], i], particles.lat[l_deep_sea[:, i], i])
+        point_ds.set_data(x_ds, y_ds)
+
+        roms_data = read_roms_data_from_multiple_netcdfs(roms_input_dir, particles.time[i], particles.time[i])
+        values = getattr(roms_data, parameter)[0, s, :, :]
+        field.set_array(values.ravel())
+
+        title = particles.time[i].strftime('%d %b %Y %H:%M')
+        ttl.set_text(title)
+
+        return point, point_ds, ttl
+
+    anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(particles.time), blit=True)
+    if output_path is not None:
+        log.info(f'Saving animation to: {output_path}')
+        anim.save(output_path, writer=writer)
+    else:
+        plt.show()
+
 if __name__ == '__main__':
+
+    location_info = get_location_info('cwa_perth')
     
     # # --- ROMS temperature gradient data ---
     # input_dir = f'{get_dir_from_json("roms_data")}2017/'
     # start_date = datetime(2017, 3, 1)
     # end_date = datetime(2017, 8, 1)
-    lon_c = 115.70 # coastal coordinate
-    lat_c = -31.76
-    lon_o = 114.47 # offshore coordinate
-    lat_o = -31.80
+    # lon_c = 115.70 # coastal coordinate
+    # lat_c = -31.76
+    # lon_o = 114.47 # offshore coordinate
+    # lat_o = -31.80
 
     # time, temp_c, temp_o = get_coastal_offshore_temperature_timeseries_from_roms_netcdfs(
     #                                                                     input_dir, start_date, end_date,
@@ -257,26 +337,32 @@ if __name__ == '__main__':
     # df['temp_o'] = temp_o
     # df.to_csv('test_roms_temperature_points.csv', index=False)
 
-    df = pd.read_csv('test_roms_temperature_points.csv')
-    time = pd.to_datetime(df['time'].values)
-    temp_c = df['temp_c'].values
-    temp_o = df['temp_o'].values
+    # df = pd.read_csv('test_roms_temperature_points.csv')
+    # time = pd.to_datetime(df['time'].values)
+    # temp_c = df['temp_c'].values
+    # temp_o = df['temp_o'].values
 
-    # --- Wind data ---
-    wind_data = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
-    wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon_o, lat_o)
+    # # --- Wind data ---
+    # wind_data = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
+    # wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon_o, lat_o)
 
     # --- Particle tracking data ---
     h_deep_sea = 600 # m depth: max Leeuwin Undercurrent depth
     input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
     particles = Particles.read_from_netcdf(input_path)
-
+    
+    # --- ROMS data ---
+    roms_input_dir = f'{get_dir_from_json("roms_data")}2017/'
+    
     # -- plots ---
     output_dir = f'{get_dir_from_json("plots")}'
 
-    time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
-    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{time_str}.jpg'
-    plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, time, temp_c, temp_o,
-                                                 wind_data.time, wind_vel, wind_dir,
-                                                 output_path=output_path, show=False)
+    # time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
+    # output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{time_str}.jpg'
+    # plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, time, temp_c, temp_o,
+    #                                              wind_data.time, wind_vel, wind_dir,
+    #                                              output_path=output_path, show=False)
+
+    output_path = f'{output_dir}cwa-perth_animation_with_bottom_temp_2017-Mar-Aug.gif'
+    animate_particles_with_roms_field(particles, roms_input_dir, location_info, h_deep_sea, output_path=output_path)
 
