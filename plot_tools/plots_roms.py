@@ -6,7 +6,7 @@ from tools.files import get_dir_from_json, get_daily_files_in_time_range
 from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.coordinates import get_bearing_between_points
 from tools import log
-from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs, read_roms_data_from_netcdf
+from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs, read_roms_data_from_netcdf, read_roms_grid_from_netcdf
 from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
 from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
@@ -291,6 +291,45 @@ def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
     if show is True:
         plt.show()
 
+def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, end_date:datetime,
+                                           thres_vel:float, location_info:LocationInfo, s=0, cmap='viridis',
+                                           ax=None, show=True, output_path=None):
+
+    roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+
+    ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
+
+    n_total_times = 0
+    n_exceed = np.zeros(roms_grid.lon.shape)
+
+    for ncfile in ncfiles:
+        roms_data = read_roms_data_from_netcdf(ncfile)
+
+        vel = np.sqrt(roms_data.u_east[:, s, :, :]**2+roms_data.v_north[:, s, :, :]**2)
+
+        n_total_times += len(roms_data.time)
+        n_exceed += np.sum(vel>thres_vel, axis=0)
+
+    p_exceed = n_exceed/n_total_times*100
+
+    if ax is None:
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        ax = plot_basic_map(ax, location_info)
+        ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
+
+    c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, p_exceed, cmap=cmap, vmin=0, vmax=100)
+    cbar = plt.colorbar(c)
+    cbar.set_label('Exceedance threshold velocity (%)')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
 def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_date:datetime,
                                        thres_vel:float, thres_sd:float, thres_name:str, s=0, # bottom layer
                                        color='#346ca7', edgecolor='none',
@@ -349,12 +388,16 @@ if __name__ == '__main__':
     end_date = datetime(2017, 8, 1)
     # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
 
-    thres_vels = 0.045#, 0.031]
-    thres_sds = 0.016#, 0.015]
-    thres_names = 'Ecklonia'#, 'Ecklonia (medium)']
+    thres_vel = 0.045#, 0.031]
+    thres_sd = 0.016#, 0.015]
+    thres_name = 'Ecklonia'#, 'Ecklonia (medium)']
     time_str = f'{start_date.year}-{start_date.strftime("%b")}-{end_date.strftime("%b")}'
-    output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_{time_str}.jpg'
-    plot_exceedance_threshold_velocity(input_dir, start_date, end_date, thres_vels, thres_sds, thres_names, output_path=output_path, show=False)
+    # output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_{time_str}.jpg'
+    # plot_exceedance_threshold_velocity(input_dir, start_date, end_date, thres_vel, thres_sd, thres_name, output_path=output_path, show=False)
+
+    location_info = get_location_info('cwa_perth')
+    output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_map_{time_str}.jpg'
+    plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info, output_path=output_path, show=False)
 
     # location_info = get_location_info('perth')
     # input_dir = f'{get_dir_from_json("roms_data")}2022/'
