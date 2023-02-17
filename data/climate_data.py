@@ -2,8 +2,7 @@ import os, sys
 parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
-from tools.files import get_dir_from_json
-from tools.timeseries import convert_time_to_datetime
+from tools.timeseries import convert_time_to_datetime, get_l_time_range, add_month_to_time
 import pandas as pd
 from netCDF4 import Dataset
 from datetime import datetime, timedelta
@@ -37,4 +36,11 @@ def read_dmi_data(input_path='input/dmi_2023.nc') -> tuple:
 
     nc.close()
 
-    return time, dmi
+    dmi_monthly_mean = []
+    time_monthly_mean = np.unique([datetime(t.year, t.month, 1) for t in time])
+
+    for t in time_monthly_mean:
+        l_time = get_l_time_range(time, t, add_month_to_time(t, 1)-timedelta(days=1))
+        dmi_monthly_mean.append(np.nanmean(dmi[l_time]))
+
+    return np.array(time_monthly_mean), np.array(dmi_monthly_mean)
