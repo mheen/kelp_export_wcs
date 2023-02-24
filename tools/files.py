@@ -7,11 +7,11 @@ def get_dir_from_json(dirname:str, json_file='input/dirs.json') -> str:
         all_dirs = json.load(f)
     return all_dirs[dirname]
 
-def get_files_in_dir(input_dir:str, file_ext:str, full_path=True) -> list:
+def get_files_in_dir(input_dir:str, file_ext:str, return_full_path=True) -> list:
     files = []
     for filename in os.listdir(input_dir):
         if filename.endswith(f'.{file_ext}'):
-            if full_path is True:
+            if return_full_path is True:
                 files.append(f'{input_dir}{filename}')
             else:
                 files.append(filename)
