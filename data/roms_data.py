@@ -344,13 +344,3 @@ def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat
         command = [distutils.spawn.find_executable('ncks')] + ncks_options + [input_path, output_path]
         log.info(f'Extracting transect data, saving to: {output_path}')
         subprocess.run(command)
-
-if __name__ == '__main__':
-    lon1 = 115.70
-    lat1 = -31.76
-    lon2 = 115.26
-    lat2 = -31.95
-    ds = 500
-
-    write_transect_data_to_netcdf('/mnt/j/roms_perth/2017/', '/mnt/j/roms_perth/2017/transect/',
-                                  lon1, lat1, lon2, lat2, ds)
