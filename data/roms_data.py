@@ -2,7 +2,7 @@ import os, sys
 parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
-from tools.files import get_daily_files_in_time_range
+from tools.files import get_daily_files_in_time_range, get_files_in_dir, create_dir_if_does_not_exist
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points
 from tools.arrays import get_closest_index
@@ -12,6 +12,8 @@ from matplotlib import path
 import numpy as np
 from netCDF4 import Dataset
 from datetime import datetime
+import distutils.spawn
+import subprocess
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     
@@ -76,7 +78,8 @@ class RomsGrid:
         etas = []
         xis = []
         for i in range(len(lon_p)):
-            xi, _, eta, _ = bbox2ij(self.lon, self.lat, [lon_p[i], lon_p[i]+0.1, lat_p[i], lat_p[i]+0.1])
+            xi = get_closest_index(self.lon[0, :], lon_p[i])
+            eta = get_closest_index(self.lat[:, 0], lat_p[i])
             etas.append(eta)
             xis.append(xi)
         return np.array(etas), np.array(xis)
@@ -257,10 +260,18 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
 
     return RomsData(time, grid, u_east, v_north, temp, salt)
 
-def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float, lon2:float, lat2:float, ds:float) -> tuple:
+def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float,
+                              lon2:float, lat2:float, ds:float) -> tuple:
     lons, lats = get_points_on_line_between_points(lon1, lat1, lon2, lat2, ds)
     eta, xi = grid.get_eta_xi_of_lon_lat_point(lons, lats)
-    return eta, xi
+
+    coords = list(zip(eta, xi))
+    unique_coords = list(dict.fromkeys(coords))
+    unique_coords_list = list(zip(*unique_coords))
+    eta_unique = unique_coords_list[0]
+    xi_unique = unique_coords_list[1]
+    
+    return eta_unique, xi_unique
 
 def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
     distance = [0]
@@ -272,15 +283,17 @@ def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
     
     return np.cumsum(distance) # distance in meters
 
-def get_gradient_along_transect(roms_data:RomsData, parameter:str, s_layer:int, time:datetime,
-                                lon1:float, lat1:float, lon2:float, lat2:float, ds:float) -> tuple:
+def get_depth_integrated_gradient_along_transect(input_dir:str, parameter:str,
+                                                       start_time:datetime, end_time:datetime,
+                                                       lon1:float, lat1:float,
+                                                       lon2:float, lat2:float, ds:float) -> tuple:
     
+    roms_data = read_roms_data_from_multiple_netcdfs(input_dir, start_time, end_time)
+
     eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
     lon = roms_data.grid.lon[eta, xi]
     lat = roms_data.grid.lat[eta, xi]
     distance = get_distance_along_transect(lon, lat)/1000 # distance in km
-
-    t = get_closest_time_index(roms_data.time, time)
 
     if hasattr(roms_data, parameter):
         values = getattr(roms_data, parameter)
@@ -291,14 +304,53 @@ def get_gradient_along_transect(roms_data:RomsData, parameter:str, s_layer:int, 
 
     if len(values.shape) == 2: # [eta, xi]
         values = values[eta, xi]
+        dvalues = np.diff(values)
     elif len(values.shape) == 3: # [time, eta, xi]
-        values = values[t, eta, xi]
+        values = values[:, eta, xi]
+        dvalues = np.diff(values)
     elif len(values.shape) == 4: # [time, s, eta, xi]
-        values = values[t, s_layer, eta, xi]
+        values = values[:, :, eta, xi]
+        depth_average_values = np.nanmean(values, axis=1)
+        dvalues = np.diff(depth_average_values)
 
-    dvalue = np.diff(values)
-    dx = np.diff(distance)
-
-    gradient = dvalue/dx
+    gradient = np.nanmean(dvalues/np.diff(distance), axis=1) # mean gradient varying in time
 
     return gradient, values, distance
+
+def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat1:float,
+                                  lon2:float, lat2:float, ds:float,
+                                  grid_file='input/cwa_roms_grid.nc'):
+    
+    grid = read_roms_grid_from_netcdf(grid_file)
+    eta, xi = get_eta_xi_along_transect(grid, lon1, lat1, lon2, lat2, ds)
+    eta0 = np.nanmax([np.nanmin(eta)-2, 0]) # margin of 2, but can't be less than 0
+    eta1 = np.nanmin([np.nanmax(eta)+2, grid.lon.shape[0]-1]) # margin of 2, but can't be more than length
+    xi0 = np.nanmax([np.nanmin(xi)-2, 0]) # margin of 2, but can't be less than 0
+    xi1 = np.nanmin([np.nanmax(xi)+2, grid.lon.shape[1]-1]) # margin of 2, but can't be more than length
+
+    create_dir_if_does_not_exist(output_dir)
+
+    ncfiles = get_files_in_dir(input_dir, 'nc', return_full_path=False)
+    for ncfile in ncfiles:
+        output_path = f'{output_dir}{ncfile}'
+        if os.path.exists(output_path):
+            log.info(f'Transect file already exists, skipping: {output_path}')
+        input_path = f'{input_dir}{ncfile}'
+
+        ncks_slice_rho = ['-d', f'eta_rho,{eta0},{eta1},1' ,'-d', f'xi_rho,{xi0},{xi1},1']
+        ncks_slice_v = ['-d', f'eta_v,{eta0},{eta1-1},1', '-d', f'xi_v,{xi0},{xi1},1']
+        ncks_slice_u = ['-d', f'eta_u,{eta0},{eta1},1', '-d', f'xi_u,{xi0},{xi1-1},1']
+        ncks_options = ncks_slice_rho + ncks_slice_v + ncks_slice_u
+        command = [distutils.spawn.find_executable('ncks')] + ncks_options + [input_path, output_path]
+        log.info(f'Extracting transect data, saving to: {output_path}')
+        subprocess.run(command)
+
+if __name__ == '__main__':
+    lon1 = 115.70
+    lat1 = -31.76
+    lon2 = 115.26
+    lat2 = -31.95
+    ds = 500
+
+    write_transect_data_to_netcdf('/mnt/j/roms_perth/2017/', '/mnt/j/roms_perth/2017/transect/',
+                                  lon1, lat1, lon2, lat2, ds)
