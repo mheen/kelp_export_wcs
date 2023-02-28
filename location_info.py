@@ -24,8 +24,10 @@ cwa_perth_zoom2 = LocationInfo('cwa_perth_zoom2', [114.0, 115.87], [-34.33, -31.
 gsr = LocationInfo('gsr', [112.0, 155.0], [-45.0, -27.5],
                    [120.0, 130.0, 140., 150.0], [-44.0, -40.0, -36.0, -32.0, -28.0],
                    [10, 25, 50, 100, 200, 400, 600, 800, 1000, 1500, 2000, 3000, 4000, 5000, 6000])
+wa = LocationInfo('wa', [112.0, 116.0], [-34.0, -28.0],
+                  [112.0, 114.0, 116.0], [-34.0, -32.0, -30.0, -28.0], [10, 50, 100, 200, 400, 600, 800, 1000, 2000, 3000, 4000, 5000, 6000])
 
-all_locations = [perth, cwa_perth, cwa_perth_zoom, cwa_perth_zoom2, gsr]
+all_locations = [perth, cwa_perth, cwa_perth_zoom, cwa_perth_zoom2, gsr, wa]
 
 def get_location_info(location:str) -> LocationInfo:
     for loc in all_locations:
