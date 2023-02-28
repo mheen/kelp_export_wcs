@@ -4,7 +4,7 @@ sys.path.insert(1, parent)
 
 from tools.files import get_dir_from_json, get_daily_files_in_time_range
 from tools.timeseries import get_closest_time_index, get_l_time_range
-from tools.coordinates import get_bearing_between_points
+from tools.coordinates import get_bearing_between_points, get_transect_lons_lats_ds_from_json
 from tools import log
 from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs, read_roms_data_from_netcdf, read_roms_grid_from_netcdf
 from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
@@ -405,11 +405,7 @@ if __name__ == '__main__':
     # end_date = datetime(2022, 7, 10)
     # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
     
-    # lon1 = 115.70
-    # lat1 = -31.76
-    # lon2 = 115.26
-    # lat2 = -31.95
-    # ds = 500
+    # lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('perth_glider')
 
     # mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
     # output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'

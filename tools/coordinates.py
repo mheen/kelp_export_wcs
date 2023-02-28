@@ -1,5 +1,23 @@
 from geographiclib.geodesic import Geodesic
 import numpy as np
+import json
+
+def get_transect_lons_lats_ds_from_json(transect_name:str, json_file='input/transects.json') -> tuple:
+    with open(json_file, 'r') as f:
+        all_transects = json.load(f)
+    
+    if transect_name in all_transects.keys():
+        transect = all_transects[transect_name]
+    else:
+        raise ValueError(f'Unknown transect name. Valid options are: {list(all_transects.keys())}')
+    
+    lon1 = transect['lon1']
+    lat1 = transect['lat1']
+    lon2 = transect['lon2']
+    lat2 = transect['lat2']
+    ds = transect['ds']
+
+    return lon1, lat1, lon2, lat2, ds
 
 def get_bearing_between_points(lon1, lat1, lon2, lat2):
     geod = Geodesic.WGS84
