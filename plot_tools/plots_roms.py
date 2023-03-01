@@ -405,7 +405,7 @@ if __name__ == '__main__':
     # end_date = datetime(2022, 7, 10)
     # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
     
-    # lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('perth_glider')
+    # lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
 
     # mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
     # output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
