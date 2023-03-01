@@ -4,8 +4,7 @@ sys.path.insert(1, parent)
 
 from tools.files import get_daily_files_in_time_range, get_files_in_dir, create_dir_if_does_not_exist
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
-from tools.coordinates import get_distance_between_points, get_points_on_line_between_points
-from tools.arrays import get_closest_index
+from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_transect_lons_lats_ds_from_json
 from tools import log
 from dataclasses import dataclass
 from matplotlib import path
@@ -14,6 +13,7 @@ from netCDF4 import Dataset
 from datetime import datetime
 import distutils.spawn
 import subprocess
+from scipy import spatial
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     
@@ -24,7 +24,10 @@ def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     Example
     -------  
     >>> i0, i1, j0, j1 = bbox2ij(lon_rho, [-71, -63., 39., 46])
-    >>> h_subset = nc.variables['h'][j0:j1, i0:i1]       
+    >>> h_subset = nc.variables['h'][j0:j1, i0:i1]
+
+    Copied from Rich Signell
+    https://gis.stackexchange.com/questions/71630/subsetting-a-curvilinear-netcdf-file-roms-model-output-using-a-lon-lat-boundin
     '''
     bbox = np.array(bbox)
     mypath = np.array([bbox[[0,1,1,0]], bbox[[2,2,3,3]]]).T
@@ -55,14 +58,22 @@ def get_z(s:np.ndarray, h:np.ndarray, cs_r:np.ndarray, hc:np.ndarray) -> np.ndar
 
     return z
 
-@dataclass
 class RomsGrid:
-    lon: np.ndarray # [eta, xi]
-    lat: np.ndarray # [eta, xi]
-    s: np.ndarray # [s]
-    angle: np.ndarray # [eta, xi]
-    h: np.ndarray # [eta, xi]
-    z: np.ndarray # [s, eta, xi]
+    def __init__(self, lon:np.ndarray,
+                 lat:np.ndarray,
+                 s:np.ndarray,
+                 angle:np.ndarray,
+                 h:np.ndarray,
+                 z:np.ndarray):
+        self.lon = lon # [eta, xi]
+        self.lat = lat # [eta, xi]
+        self.s = s # [s]
+        self.angle = angle # [eta, xi]
+        self.h = h # [eta, xi]
+        self.z = z # [eta, xi]
+    
+        grid_coords_1d = list(zip(np.ravel(self.lon), np.ravel(self.lat)))
+        self.kdtree = spatial.KDTree(grid_coords_1d)
 
     def get_lon_lat_range(self) -> tuple:
         lon_range = [np.nanmin(self.lon), np.nanmax(self.lon)]
@@ -71,15 +82,15 @@ class RomsGrid:
         return lon_range, lat_range
 
     def get_eta_xi_of_lon_lat_point(self, lon_p:np.ndarray, lat_p:np.ndarray) -> tuple:
-        if type(lon_p) is float:
-            lon_p = [lon_p]
-        if type(lat_p) is float:
-            lat_p = [lat_p]
+        if type(lon_p) is float and type(lat_p) is float:
+            distance, index = self.kdtree.query([lon_p, lat_p])
+            eta, xi = np.unravel_index(index, self.lon.shape)
+            return xi, eta
         etas = []
         xis = []
         for i in range(len(lon_p)):
-            xi = get_closest_index(self.lon[0, :], lon_p[i])
-            eta = get_closest_index(self.lat[:, 0], lat_p[i])
+            distance, index = self.kdtree.query([lon_p[i], lat_p[i]])
+            eta, xi = np.unravel_index(index, self.lon.shape)
             etas.append(eta)
             xis.append(xi)
         return np.array(etas), np.array(xis)
@@ -119,49 +130,6 @@ def get_subgrid(grid:RomsGrid, lon_range:list, lat_range:list, s_range:list) -> 
     z = grid.z[s0:s1, j0:j1, i0:i1]
 
     return RomsGrid(lon, lat, grid.s, angle, h, z)
-    
-def convert_roms_u_v_to_u_east_v_north(u:np.ndarray, v:np.ndarray, angle:np.ndarray) -> tuple:
-    '''Convert u and v from curvilinear ROMS output to u eastwards and v northwards.
-    This is done by:
-    1. Converting u and v so that they are on rho-coordinate point (cell center).
-    2. Rotating u and v so they are directed eastwards and northwards respectively.'''
-
-    def u2rho(var_u:np.ndarray) -> np.ndarray:
-        '''Convert variable on u-coordinate to rho-coordinate.'''
-        var_u_size = var_u.shape
-        n_dimension = len(var_u_size)
-        L = var_u_size[-1]
-        if n_dimension == 4:
-            var_rho = np.zeros((var_u_size[0], var_u_size[1], var_u_size[2], L+1))
-            var_rho[:, :, :, 1:L] = 0.5*(var_u[:, :, :, 0:L-1]+var_u[:, :, :, 1:L])
-            var_rho[:, :, :, 0] = var_rho[:, :, :, 1]
-            var_rho[:, :, :, L] = var_rho[:, :, :, L-1]
-        return var_rho
-
-    def v2rho(var_v:np.ndarray) -> np.ndarray:
-        '''Convert variable on v-coordinate to rho-coordinate.'''
-        var_v_size = var_v.shape
-        n_dimension = len(var_v_size)
-        M = var_v_size[-2]      
-        if n_dimension == 4:
-            var_rho = np.zeros((var_v_size[0], var_v_size[1], M+1, var_v_size[3]))
-            var_rho[:, :, 1:M, :] = 0.5*(var_v[:, :, 0:M-1, :]+var_v[:, :, 1:M, :])
-            var_rho[:, :, 0, :] = var_rho[:, :, 1, :]
-            var_rho[:, :, M, :] = var_rho[:, :, M-1, :]
-        return var_rho
-
-    def rotate_u_v(u:np.ndarray, v:np.ndarray, angle:np.ndarray) -> tuple:
-        '''Rotate u and v velocities on curvilinear grid so that
-        they are directed east- and northwards respectively.'''
-        u_east = u*np.cos(angle)-v*np.sin(angle)
-        v_north = v*np.cos(angle)+u*np.sin(angle)
-        return u_east, v_north
-
-    u_rho = u2rho(u)
-    v_rho = v2rho(v)
-    u_east, v_north = rotate_u_v(u_rho, v_rho, angle)
-
-    return u_east, v_north
 
 @dataclass
 class RomsData:
@@ -172,25 +140,22 @@ class RomsData:
     temp: np.ndarray
     salt: np.ndarray
 
-def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
+def get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
     full_grid = read_roms_grid_from_netcdf(input_path)
 
     i0 = None
     i1 = None
     j0 = None
     j1 = None
-    if lon_range is not None:
-        i0 = get_closest_index(full_grid.lon[0, :], lon_range[0])
-        if lon_range[1] == lon_range[0]:
+    if lon_range is not None and lat_range is not None:
+        i0, j0 = full_grid.get_eta_xi_of_lon_lat_point(lon_range[0], lat_range[0])
+        i1, j1 = full_grid.get_eta_xi_of_lon_lat_point(lon_range[1], lat_range[1])
+        if i0 == i1:
             i1 = i0+1
-        else:
-            i1 = get_closest_index(full_grid.lon[0, :], lon_range[1])
-    if lat_range is not None:
-        j0 = get_closest_index(full_grid.lat[:, 0], lat_range[0])
-        if lat_range[1] == lat_range[0]:
+        if j0 == j1:
             j1 = j0+1
-        else:
-            j1 = get_closest_index(full_grid.lat[:, 0], lat_range[1])
+    if lon_range is not None and lat_range is None or lat_range is not None and lon_range is None:
+        raise ValueError('You must specify both a lon and lat range, not just one.')
 
     log.info(f'Reading ROMS data from {input_path}')
     nc = Dataset(input_path)
@@ -213,21 +178,114 @@ def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, t
     temp = nc['temp'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
     salt = nc['salt'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan) # [time, s, eta, xi]
 
-    # read in full u and v first, then select lon and lat range after conversion to u_east and v_north
-    # ugly and slow way of doing this: figure out how to select correct ranges for u and v
-    u = nc['u'][t0:t1, :, :, :].filled(fill_value=np.nan) # [time, s, eta, xi]
-    v = nc['v'][t0:t1, :, :, :].filled(fill_value=np.nan) # [time, s, eta, xi]
+    # subset u and v (potentially needs padding to convert u- and v- to rho-points)
+    # based on position of slice, add padding if needed
+    len_eta = full_grid.lon.shape[0]
+    len_xi = full_grid.lon.shape[1]
+    if i0 is None and i1 is None or i0 == 0 and i1 == len_xi-1: # all (pad both sides)
+        u_org = nc['u'][t0:t1, :, j0:j1, :].filled(fill_value=np.nan)
+        u = np.empty((u_org.shape[0], u_org.shape[1], u_org.shape[2], u_org.shape[3]+2))
+        u[:, :, :, 1:-1] = u_org
+        u[:, :, :, 0] = u_org[:, :, :, 0]
+        u[:, :, :, -1] = u_org[:, :, :, -1]
+    elif i0 == 0 and i1 < len_xi-1: # left (pad left)
+        u_org = nc['u'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan)
+        u = np.empty((u_org.shape[0], u_org.shape[1], u_org.shape[2], u_org.shape[3]+1))
+        u[:, :, :, 1:] = u_org
+        u[:, :, :, 0] = u_org[:, :, :, 0]
+    elif i0 > 0 and i1 < len_xi-1: # middle (no padding)
+        u = nc['u'][t0:t1, :, j0:j1, i0-1:i1].filled(fill_value=np.nan)
+    elif i0 > 0 and i1 == len_xi-1: # right (pad right)
+        u_org = nc['u'][t0:t1, :, j0:j1, i0-1:i1].filled(fill_value=np.nan)
+        u = np.empty((u_org.shape[0], u_org.shape[1], u_org.shape[2], u_org.shape[3]+1))
+        u[:, :, :, 0:-1] = u_org
+        u[:, :, :, -1] = u_org[:, :, :, -1]
+
+    if j0 is None and j1 is None or j0 == 0 and j1 == len_eta-1: # all (pad both sides)
+        v_org = nc['v'][t0:t1, :, :, i0:i1].filled(fill_value=np.nan)
+        v = np.empty((v_org.shape[0], v_org.shape[1], v_org.shape[2]+2, v_org.shape[3]))
+        v[:, :, 1:-1, :] = v_org
+        v[:, :, 0, :] = v_org[:, :, 0, :]
+        v[:, :, -1, :] = v_org[:, :, -1, :]
+    elif j0 == 0 and j1 < len_eta-1: # bottom (pad bottom)
+        v_org = nc['v'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan)
+        v = np.empty((v_org.shape[0], v_org.shape[1], v_org.shape[2]+1, v_org.shape[3]))
+        v[:, :, 1:, :] = v_org
+        v[:, :, 0, :] = v_org[:, :, 0, :]
+    elif j0 > 0 and j1 < len_eta-1: # middle (no padding)
+        v = nc['v'][t0:t1, :, j0-1:j1, i0:i1].filled(fill_value=np.nan)
+    elif j0 > 0 and j1 == len_eta-1: # top (pad top)
+        v_org = nc['v'][t0:t1, :, j0-1:j1, i0:i1].filled(fill_value=np.nan)
+        v = np.empty((v_org.shape[0], v_org.shape[1], v_org.shape[2]+1, v_org.shape[3]))
+        v[:, :, 0:-1, :] = v_org
+        v[:, :, -1, :] = v_org[:, :, -1, :]
 
     nc.close()
 
-    u_east, v_north = convert_roms_u_v_to_u_east_v_north(u, v, full_grid.angle)
-    u_east = u_east[:, :, j0:j1, i0:i1]
-    v_north = v_north[:, :, j0:j1, i0:i1]
+    def convert_roms_u_v_to_u_east_v_north(u:np.ndarray, v:np.ndarray, angle:np.ndarray) -> tuple:
+        '''Convert u and v from curvilinear ROMS output to u eastwards and v northwards.
+        This is done by:
+        1. Converting u and v so that they are on rho-coordinate point (cell center).
+        2. Rotating u and v so they are directed eastwards and northwards respectively.
+        
+        Example grid: "." = rho-point, "x" = u-point, "*" = v-point
+            _________ _________ _________ _________
+            |         |         |         |         |
+            |    .    x    .    x    .    x    .    |
+            |   0,2  0,2  1,2  1,2  2,2  2,2  3,2   |
+            |         |         |         |         |
+            |____*____|____*____|____*____|____*____|
+            |   0,1   |   1,1   |   2,1   |   3,1   |
+            |    .    x    .    x    .    x    .    |
+            |   0,1  0,1  1,1  1,1  2,1  2,1  3,1   |
+            |         |         |         |         |
+            |____*____|____*____|____*____|____*____|
+            |   0,0   |   1,0   |   2,0   |   3,0   |
+            |    .    x    .    x    .    x    .    |
+            |   0,0  0,0  1,0  1,0  2,0  2,0  3,0   |
+        ^  |         |         |         |         |
+        |  |_________|_________|_________|_________|
+        eta  xi ->
+        '''
+
+        def u2rho(var_u:np.ndarray) -> np.ndarray:
+            '''Convert variable on u-coordinate to rho-coordinate.'''
+            var_u_size = var_u.shape
+            n_dimension = len(var_u_size)
+            L = var_u_size[-1]
+            if n_dimension == 4:
+                var_rho = 0.5*(var_u[:, :, :, 0:-1]+var_u[:, :, :, 1:])
+            return var_rho
+
+        def v2rho(var_v:np.ndarray) -> np.ndarray:
+            '''Convert variable on v-coordinate to rho-coordinate.'''
+            var_v_size = var_v.shape
+            n_dimension = len(var_v_size)
+            M = var_v_size[-2]      
+            if n_dimension == 4:
+                var_rho = 0.5*(var_v[:, :, 0:-1, :]+var_v[:, :, 1:, :])
+            return var_rho
+
+        def rotate_u_v(u:np.ndarray, v:np.ndarray, angle:np.ndarray) -> tuple:
+            '''Rotate u and v velocities on curvilinear grid so that
+            they are directed east- and northwards respectively.'''
+            u_east = u*np.cos(angle)-v*np.sin(angle)
+            v_north = v*np.cos(angle)+u*np.sin(angle)
+            return u_east, v_north
+
+        u_rho = u2rho(u)
+        v_rho = v2rho(v)
+        u_east, v_north = rotate_u_v(u_rho, v_rho, angle)
+
+        return u_east, v_north
+
+    angle = full_grid.angle[j0:j1, i0:i1]
+    u_east, v_north = convert_roms_u_v_to_u_east_v_north(u, v, angle)
 
     lon = full_grid.lon[j0:j1, i0:i1]
     lat = full_grid.lat[j0:j1, i0:i1]
     s = full_grid.s[:]
-    angle = full_grid.angle[j0:j1, i0:i1]
+    
     h = full_grid.h[j0:j1, i0:i1]
     z = full_grid.z[:, j0:j1, i0:i1]
     grid = RomsGrid(lon, lat, s, angle, h, z)
@@ -235,7 +293,7 @@ def _get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, t
     return time, grid, u_east, v_north, temp, salt
 
 def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
-    time, grid, u_east, v_north, temp, salt = _get_roms_data_from_netcdf(input_path,
+    time, grid, u_east, v_north, temp, salt = get_roms_data_from_netcdf(input_path,
                                                                          lon_range,
                                                                          lat_range,
                                                                          time_range)
@@ -248,10 +306,10 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
 
     nc_files = get_daily_files_in_time_range(input_dir, start_time, end_time, 'nc')
 
-    time, grid, u_east, v_north, temp, salt = _get_roms_data_from_netcdf(nc_files[0], lon_range, lat_range, time_range)
+    time, grid, u_east, v_north, temp, salt = get_roms_data_from_netcdf(nc_files[0], lon_range, lat_range, time_range)
 
     for i in range(1, len(nc_files)):
-        t, _, u, v, tp, s = _get_roms_data_from_netcdf(nc_files[i], lon_range, lat_range, time_range)
+        t, _, u, v, tp, s = get_roms_data_from_netcdf(nc_files[i], lon_range, lat_range, time_range)
         time = np.concatenate((time, t))
         u_east = np.concatenate((u_east, u))
         v_north = np.concatenate((v_north, v))
@@ -284,9 +342,9 @@ def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
     return np.cumsum(distance) # distance in meters
 
 def get_depth_integrated_gradient_along_transect(input_dir:str, parameter:str,
-                                                       start_time:datetime, end_time:datetime,
-                                                       lon1:float, lat1:float,
-                                                       lon2:float, lat2:float, ds:float) -> tuple:
+                                                 start_time:datetime, end_time:datetime,
+                                                 lon1:float, lat1:float,
+                                                 lon2:float, lat2:float, ds:float) -> tuple:
     
     roms_data = read_roms_data_from_multiple_netcdfs(input_dir, start_time, end_time)
 
