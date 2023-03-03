@@ -14,6 +14,7 @@ from datetime import datetime
 import distutils.spawn
 import subprocess
 from scipy import spatial
+import warnings
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     
@@ -82,7 +83,8 @@ class RomsGrid:
         return lon_range, lat_range
 
     def get_eta_xi_of_lon_lat_point(self, lon_p:np.ndarray, lat_p:np.ndarray) -> tuple:
-        if type(lon_p) is float and type(lat_p) is float:
+        float_types = [float, np.float64]
+        if type(lon_p) in float_types and type(lat_p) in float_types:
             distance, index = self.kdtree.query([lon_p, lat_p])
             eta, xi = np.unravel_index(index, self.lon.shape)
             return xi, eta
@@ -341,17 +343,29 @@ def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
     
     return np.cumsum(distance) # distance in meters
 
-def get_depth_integrated_gradient_along_transect(input_dir:str, parameter:str,
-                                                 start_time:datetime, end_time:datetime,
+def get_roms_data_for_transect(input_dir:str, start_time:datetime, end_time:datetime,
+                               lon1:float, lat1:float, lon2:float, lat2:float) -> RomsData:
+    lon_range = [np.nanmin([lon1, lon2]), np.nanmax([lon1, lon2])]
+    lat_range = [np.nanmin([lat1, lat2]), np.nanmax([lat1, lat2])]
+    roms_data = read_roms_data_from_multiple_netcdfs(input_dir, start_time, end_time,
+                                                     lon_range=lon_range, lat_range=lat_range)
+    return roms_data
+
+def get_depth_integrated_gradient_along_transect(roms_data:RomsData, parameter:str,
                                                  lon1:float, lat1:float,
                                                  lon2:float, lat2:float, ds:float) -> tuple:
-    
-    roms_data = read_roms_data_from_multiple_netcdfs(input_dir, start_time, end_time)
+    warnings.warn('''The calculation of the gradient along a transect assumes that
+                  increasing distance is means moving away from the coast:
+                  i.e. the point (lon1, lat1) is closer to the coast than the point (lon2, lat2).
+                  If this is not the case, you will get negative gradients where you
+                  expect positive ones and vice versa.''')
+
 
     eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
     lon = roms_data.grid.lon[eta, xi]
     lat = roms_data.grid.lat[eta, xi]
     distance = get_distance_along_transect(lon, lat)/1000 # distance in km
+    z = roms_data.grid.z[:, eta, xi]
 
     if hasattr(roms_data, parameter):
         values = getattr(roms_data, parameter)
@@ -369,11 +383,11 @@ def get_depth_integrated_gradient_along_transect(input_dir:str, parameter:str,
     elif len(values.shape) == 4: # [time, s, eta, xi]
         values = values[:, :, eta, xi]
         depth_average_values = np.nanmean(values, axis=1)
-        dvalues = np.diff(depth_average_values)
+        dvalues = -np.diff(depth_average_values) # minus because a positive gradient is considered as decreasing temperature when moving away from the coast
 
     gradient = np.nanmean(dvalues/np.diff(distance), axis=1) # mean gradient varying in time
 
-    return gradient, values, distance
+    return gradient, values, distance, z
 
 def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat1:float,
                                   lon2:float, lat2:float, ds:float,

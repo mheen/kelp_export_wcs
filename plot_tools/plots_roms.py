@@ -7,16 +7,26 @@ from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.coordinates import get_bearing_between_points, get_transect_lons_lats_ds_from_json
 from tools import log
 from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs, read_roms_data_from_netcdf, read_roms_grid_from_netcdf
-from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_gradient_along_transect
+from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_roms_data_for_transect, get_depth_integrated_gradient_along_transect
 from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
 from plot_tools.basic_maps import plot_basic_map
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.dates as mdates
+import matplotlib.units as munits
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import pandas as pd
+
+converter = mdates.ConciseDateConverter()
+munits.registry[np.datetime64] = converter
+munits.registry[date] = converter
+munits.registry[datetime] = converter
+
+locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
+formatter = mdates.ConciseDateFormatter(locator)
 
 def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
                   parameter:str, time:datetime, s=-1, # default: surface
@@ -254,12 +264,44 @@ def animate_roms_transect(roms_data:RomsData,
     else:
         plt.show()
 
+def plot_depth_integrated_gradient_along_transect(roms_data:RomsData, gradient_values:np.ndarray, parameter:str,
+                                                  ax=None, show=True, output_path=None) -> plt.axes:
+    if parameter == 'temperature':
+        ylabel = r'$\frac{\partial T}{\partial x}$'
+    elif parameter == 'salinity':
+        ylabel = r'$\frac{\partial S}{\partial x}$'
+    elif parameter == 'density':
+        ylabel = r'$\frac{\partial \rho}{\partial x}$'
+    else:
+        ylabel = r'$\frac{\partial }{\partial x}$'
+
+    if ax is None:
+        fig = plt.figure(figsize=(10, 5))
+        ax = plt.axes()
+
+    ax.plot(roms_data.time, gradient_values, '-k')
+    ax.plot([roms_data.time[0], roms_data.time[-1]], [0, 0], '--k')
+    
+    ax.set_xlim([roms_data.time[0], roms_data.time[-1]])
+    ax.set_ylabel(ylabel, fontsize=16)
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
+
 def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
                         lon1:float, lat1:float, lon2:float, lat2:float, ds=5000,
                         show=True, output_path=None,
                         cmap='RdBu_r', vmin=None, vmax=None):
     
-    dhdx, h, distance = get_gradient_along_transect(roms_data, 'h', 0, roms_data.time[0], lon1, lat1, lon2, lat2, ds)
+    dhdx, h, distance = get_depth_integrated_gradient_along_transect(roms_data, 'h', lon1, lat1, lon2, lat2, ds)
 
     fig = plt.figure(figsize=(10, 8))
     ax1 = plt.subplot(2, 5, (1, 3))
@@ -383,22 +425,23 @@ def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_d
         return ax
 
 if __name__ == '__main__':
-    input_dir = f'{get_dir_from_json("roms_data")}2017/'
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 8, 1)
+    # # --- Exceedance threshold velocity plots ---
     # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
+    # thres_vel = 0.045#, 0.031]
+    # thres_sd = 0.016#, 0.015]
+    # thres_name = 'Ecklonia'#, 'Ecklonia (medium)']
 
-    thres_vel = 0.045#, 0.031]
-    thres_sd = 0.016#, 0.015]
-    thres_name = 'Ecklonia'#, 'Ecklonia (medium)']
-    time_str = f'{start_date.year}-{start_date.strftime("%b")}-{end_date.strftime("%b")}'
+    # # - Histogram of exceedance
+    # time_str = f'{start_date.year}-{start_date.strftime("%b")}-{end_date.strftime("%b")}'
     # output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_{time_str}.jpg'
     # plot_exceedance_threshold_velocity(input_dir, start_date, end_date, thres_vel, thres_sd, thres_name, output_path=output_path, show=False)
 
-    location_info = get_location_info('cwa_perth')
-    output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_map_{time_str}.jpg'
-    plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info, output_path=output_path, show=False)
+    # # - Map of exceedance locations
+    # location_info = get_location_info('cwa_perth')
+    # output_path = f'{get_dir_from_json("plots")}exceedance_threshold_velocity_map_{time_str}.jpg'
+    # plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info, output_path=output_path, show=False)
 
+    # # --- Transect plots ---
     # location_info = get_location_info('perth')
     # input_dir = f'{get_dir_from_json("roms_data")}2022/'
     # start_date = datetime(2022, 7, 1)
@@ -407,15 +450,27 @@ if __name__ == '__main__':
     
     # lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
 
+    # # - Map plot with transect line
     # mid_date = start_date+timedelta(days=(end_date-start_date).days/2)
     # output_path_map = f'{get_dir_from_json("plots")}roms_bathymetry_with_transect.jpg'
     # plot_roms_map_with_transect(roms, location_info, lon1, lat1, lon2, lat2, ds, 'temp', mid_date,
     #                             vmin=18, vmax=22, clabel='Temperature ($^o$C)', output_path=output_path_map, show=False)
     
+    # # - Transect animation
     # output_path_animation = f'{get_dir_from_json("plots")}roms_dswc_temperature_animation_{start_date.strftime("%b-%Y")}.gif'
     # animate_roms_transect(roms, lon1, lat1, lon2, lat2, ds, 'temp', start_date, end_date+timedelta(days=1), output_path=output_path_animation,
     #                       vmin=18, vmax=22, clabel='Temperature ($^o$C)', show_quivers=False)
 
+    # --- Gradient plots ---
+    input_dir = f'{get_dir_from_json("roms_data")}2017/'
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 8, 1)
+    lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
+    roms_data = get_roms_data_for_transect(input_dir, start_date, end_date, lon1, lat1, lon2, lat2)
+    temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'temp',
+                                                                                    lon1, lat1, lon2, lat2, ds)
+
+    plot_depth_integrated_gradient_along_transect(roms_data, temp_gradient, 'temperature')
 
     # lon1 = 115.70
     # lat1 = -31.76
