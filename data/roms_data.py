@@ -6,6 +6,7 @@ from tools.files import get_daily_files_in_time_range, get_files_in_dir, create_
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_transect_lons_lats_ds_from_json
 from tools import log
+from tools.seawater_density import calculate_density
 from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
@@ -141,6 +142,7 @@ class RomsData:
     v_north: np.ndarray
     temp: np.ndarray
     salt: np.ndarray
+    density: np.ndarray
 
 def get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
     full_grid = read_roms_grid_from_netcdf(input_path)
@@ -292,15 +294,17 @@ def get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, ti
     z = full_grid.z[:, j0:j1, i0:i1]
     grid = RomsGrid(lon, lat, s, angle, h, z)
 
-    return time, grid, u_east, v_north, temp, salt
+    density = calculate_density(salt, temp, z)
+
+    return time, grid, u_east, v_north, temp, salt, density
 
 def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
-    time, grid, u_east, v_north, temp, salt = get_roms_data_from_netcdf(input_path,
+    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(input_path,
                                                                          lon_range,
                                                                          lat_range,
                                                                          time_range)
 
-    return RomsData(time, grid, u_east, v_north, temp, salt)
+    return RomsData(time, grid, u_east, v_north, temp, salt, density)
 
 def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end_time:datetime,
                                          lon_range=None, lat_range=None) -> RomsData:
@@ -308,17 +312,18 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
 
     nc_files = get_daily_files_in_time_range(input_dir, start_time, end_time, 'nc')
 
-    time, grid, u_east, v_north, temp, salt = get_roms_data_from_netcdf(nc_files[0], lon_range, lat_range, time_range)
+    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(nc_files[0], lon_range, lat_range, time_range)
 
     for i in range(1, len(nc_files)):
-        t, _, u, v, tp, s = get_roms_data_from_netcdf(nc_files[i], lon_range, lat_range, time_range)
+        t, _, u, v, tp, s, d = get_roms_data_from_netcdf(nc_files[i], lon_range, lat_range, time_range)
         time = np.concatenate((time, t))
         u_east = np.concatenate((u_east, u))
         v_north = np.concatenate((v_north, v))
         temp = np.concatenate((temp, tp))
         salt = np.concatenate((salt, s))
+        density = np.concatenate((density, d))
 
-    return RomsData(time, grid, u_east, v_north, temp, salt)
+    return RomsData(time, grid, u_east, v_north, temp, salt, density)
 
 def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float,
                               lon2:float, lat2:float, ds:float) -> tuple:
@@ -383,7 +388,7 @@ def get_depth_integrated_gradient_along_transect(roms_data:RomsData, parameter:s
     elif len(values.shape) == 4: # [time, s, eta, xi]
         values = values[:, :, eta, xi]
         depth_average_values = np.nanmean(values, axis=1)
-        dvalues = -np.diff(depth_average_values) # minus because a positive gradient is considered as decreasing temperature when moving away from the coast
+        dvalues = np.diff(depth_average_values)
 
     gradient = np.nanmean(dvalues/np.diff(distance), axis=1) # mean gradient varying in time
 
@@ -416,3 +421,6 @@ def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat
         command = [distutils.spawn.find_executable('ncks')] + ncks_options + [input_path, output_path]
         log.info(f'Extracting transect data, saving to: {output_path}')
         subprocess.run(command)
+
+if __name__ == '__main__':
+    read_roms_data_from_netcdf('/mnt/j/roms_perth/2017/cwa_his_20170301.nc')

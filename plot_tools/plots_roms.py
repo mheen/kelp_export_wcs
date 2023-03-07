@@ -266,7 +266,7 @@ def animate_roms_transect(roms_data:RomsData,
 
 def plot_depth_integrated_gradient_along_transect(roms_data:RomsData, gradient_values:np.ndarray, parameter:str,
                                                   ax=None, show=True, output_path=None) -> plt.axes:
-    if parameter == 'temperature':
+    if parameter == 'temp':
         ylabel = r'$\frac{\partial T}{\partial x}$'
     elif parameter == 'salinity':
         ylabel = r'$\frac{\partial S}{\partial x}$'
@@ -283,7 +283,7 @@ def plot_depth_integrated_gradient_along_transect(roms_data:RomsData, gradient_v
     ax.plot([roms_data.time[0], roms_data.time[-1]], [0, 0], '--k')
     
     ax.set_xlim([roms_data.time[0], roms_data.time[-1]])
-    ax.set_ylabel(ylabel, fontsize=16)
+    ax.set_ylabel(ylabel, fontsize=20)
     ax.grid(True, linestyle='--', alpha=0.5)
 
     if output_path is not None:
@@ -294,7 +294,6 @@ def plot_depth_integrated_gradient_along_transect(roms_data:RomsData, gradient_v
         plt.show()
     else:
         return ax
-
 
 def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
                         lon1:float, lat1:float, lon2:float, lat2:float, ds=5000,
@@ -467,10 +466,32 @@ if __name__ == '__main__':
     end_date = datetime(2017, 8, 1)
     lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
     roms_data = get_roms_data_for_transect(input_dir, start_date, end_date, lon1, lat1, lon2, lat2)
-    temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'temp',
+    density_gradient, density, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'density',
                                                                                     lon1, lat1, lon2, lat2, ds)
 
-    plot_depth_integrated_gradient_along_transect(roms_data, temp_gradient, 'temperature')
+    plot_depth_integrated_gradient_along_transect(roms_data, density_gradient, 'density')
+
+    temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'temp', lon1, lat1, lon2, lat2, ds)
+    salt_gradient, salt, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'salt', lon1, lat1, lon2, lat2, ds)
+
+    def plot_gradient_single_instance(time, values_gradient, values, distance, z, t=0):
+        fig = plt.figure(figsize=(7, 10))
+        ax1 = plt.subplot(4, 1, (3, 4))
+        c = ax1.pcolormesh(distance, z, values[t, :, :], cmap='RdBu_r')
+        plt.colorbar(c)
+
+        depth_mean_values = np.nanmean(values, axis=1)
+        ax2 = plt.subplot(4, 1, 2)
+        ax2.plot(distance, depth_mean_values[t, :])
+
+        ax3 = plt.subplot(4, 1, 1)
+        ax3.plot(time, values_gradient)
+
+        plt.show()
+
+    plot_gradient_single_instance(roms_data.time, density_gradient, density, distance, z)
+    plot_gradient_single_instance(roms_data.time, salt_gradient, salt, distance, z)
+    plot_gradient_single_instance(roms_data.time, temp_gradient, temp, distance, z)
 
     # lon1 = 115.70
     # lat1 = -31.76
