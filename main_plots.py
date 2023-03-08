@@ -5,9 +5,9 @@ from tools.coordinates import get_transect_lons_lats_ds_from_json
 
 from data.kelp_data import KelpProbability
 from data.bathymetry_data import BathymetryData
-from data.wind_data import read_era5_wind_data, get_wind_vel_and_dir_in_point, get_wind_dir_and_text, get_wind_data_in_point
+from data.wind_data import read_era5_wind_data, get_wind_vel_and_dir_in_point, get_wind_dir_and_text, get_wind_data_in_point, get_daily_mean_wind_data
 from data.roms_data import RomsData, RomsGrid, read_roms_data_from_multiple_netcdfs, read_roms_grid_from_netcdf
-from data.roms_data import get_roms_data_for_transect, get_depth_integrated_gradient_along_transect
+from data.roms_data import get_roms_data_for_transect, get_depth_integrated_gradient_along_transect, read_depth_integrated_gradient_data_from_netcdf
 
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea
@@ -165,15 +165,13 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
                                                  color_vel='k', color_dir='r',
                                                  show=True, output_path=None):
 
-    daily_time_wind, daily_mean_wind_u = get_daily_means(time_wind, wind_u)
     daily_time, daily_mean_gradient = get_daily_means(time, gradient_values)
 
     dswc_shading = '#e4e4e4'
     alpha = 0.4
     l_dswc = gradient_values < 0
     ylim2 = [-4, 4] # limits for density gradient
-    ylim3 = [0, 15] # limits for onshore wind speed (m/s)
-    ylim4 = [-15, 0] # limits for offshore wind speed (m/s)
+    ylim3 = [0, 15] # limits for wind speed (m/s)
     xlim = [particles.time[0], particles.time[-1]]
 
     fig = plt.figure(figsize=(10, 8))
@@ -203,8 +201,8 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
 
     # --- onshore wind ---
     ax3 = plt.subplot(6, 1, 3)
-    l_onshore = daily_mean_wind_u>0
-    ax3.plot(daily_time_wind[l_onshore], daily_mean_wind_u[l_onshore], '-k')
+    l_onshore = wind_u>0
+    ax3.bar(time_wind[l_onshore], wind_u[l_onshore], color='#008010', edgecolor='none')
     ax3.set_ylabel('Onshore\nwind (m/s)')
     ax3.set_ylim(ylim3)
     ax3.set_xlim(xlim)
@@ -219,9 +217,9 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
     # --- offshore wind ---
     ax4 = plt.subplot(6, 1, 2)
     l_offshore = ~l_onshore
-    ax4.plot(daily_time_wind[l_offshore], daily_mean_wind_u[l_offshore], '-k')
+    ax4.bar(time_wind[l_offshore], abs(wind_u[l_offshore]), color='#C70039', edgecolor='none')
     ax4.set_ylabel('Offshore\nwind (m/s)')
-    ax4.set_ylim(ylim4)
+    ax4.set_ylim(ylim3)
     ax4.set_xlim(xlim)
     ax4.set_xticklabels([])
     ax4.grid(True, linestyle='--', alpha=0.5)
@@ -238,6 +236,7 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
     ax5.set_ylabel('Wind speed\n(m/s)')
     ax5.set_xlim(xlim)
     ax5.set_xticklabels([])
+    ax5.grid(True, linestyle='--', alpha=0.5)
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -334,19 +333,14 @@ if __name__ == '__main__':
     particles = Particles.read_from_netcdf(input_path)
     
     # --- ROMS transect and density gradient data ---
-    roms_input_dir = f'{get_dir_from_json("roms_data")}2017/'
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 8, 1)
     lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
-    roms_data = get_roms_data_for_transect(roms_input_dir, start_date, end_date, lon1, lat1, lon2, lat2)
-    density_gradient, density, distance, z = get_depth_integrated_gradient_along_transect(roms_data,
-                                                                                          'density',
-                                                                                          lon1, lat1,
-                                                                                          lon2, lat2,
-                                                                                          ds)
+
+    transect_input_path = f'{get_dir_from_json("processed_data")}roms_transects/TR_density_Mar-Aug2017.nc'
+    density_gradient, density, distance, z, time = read_depth_integrated_gradient_data_from_netcdf(transect_input_path)
     
     # --- Wind data ---
-    wind_data = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
+    wind_data_hourly = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
+    wind_data = get_daily_mean_wind_data(wind_data_hourly)
     wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon2, lat2)
     wind_data_p = get_wind_data_in_point(wind_data, lon2, lat2)
 
@@ -355,7 +349,7 @@ if __name__ == '__main__':
 
     time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
     output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{time_str}.jpg'
-    plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, roms_data.time, density_gradient, 'density',
+    plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, time, density_gradient, 'density',
                                                  wind_data.time, wind_vel, wind_dir, wind_data_p.u,
                                                  output_path=output_path, show=False)
 
