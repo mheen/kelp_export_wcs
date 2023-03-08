@@ -4,7 +4,7 @@ parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
 from tools.files import get_dir_from_json
-from tools.timeseries import convert_time_to_datetime
+from tools.timeseries import convert_time_to_datetime, get_daily_means
 from tools.arrays import get_closest_index
 from tools import log
 import numpy as np
@@ -76,3 +76,11 @@ def get_wind_vel_and_dir_in_point(wind_data:WindData, lon_p:float, lat_p:float) 
     dir = wind_data.dir[:, j, i]
 
     return vel, dir
+
+def get_daily_mean_wind_data(wind_data:WindData) -> WindData:
+    dm_time, dm_u = get_daily_means(wind_data.time, wind_data.u)
+    _, dm_v = get_daily_means(wind_data.time, wind_data.v)
+
+    dm_vel, dm_dir = convert_u_v_to_meteo_vel_dir(dm_u, dm_v)
+
+    return WindData(dm_time, wind_data.lon, wind_data.lat, dm_u, dm_u, dm_vel, dm_dir)
