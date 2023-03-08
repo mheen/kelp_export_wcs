@@ -6,6 +6,7 @@ sys.path.insert(1, parent)
 from tools.files import get_dir_from_json
 from tools.timeseries import convert_time_to_datetime
 from tools.arrays import get_closest_index
+from tools import log
 import numpy as np
 from netCDF4 import Dataset
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ def get_wind_dir_and_text() -> tuple:
     return dir, text
 
 def read_era5_wind_data(input_path:str) -> WindData:
+    log.info(f'Reading wind data from {input_path}')
     nc = Dataset(input_path)
 
     time_org = nc['time'][:].filled(fill_value=np.nan)
@@ -49,6 +51,20 @@ def read_era5_wind_data(input_path:str) -> WindData:
     nc.close()
 
     vel, dir = convert_u_v_to_meteo_vel_dir(u, v)
+
+    return WindData(time, lon, lat, u, v, vel, dir)
+
+def get_wind_data_in_point(wind_data:WindData, lon_p:float, lat_p:float) -> WindData:
+    i = get_closest_index(wind_data.lon[0, :], lon_p)
+    j = get_closest_index(wind_data.lat[:, 0], lat_p)
+
+    time = wind_data.time
+    lon = wind_data.lon[j, i]
+    lat = wind_data.lat[j, i]
+    u = wind_data.u[:, j, i]
+    v = wind_data.v[:, j, i]
+    vel = wind_data.vel[:, j, i]
+    dir = wind_data.dir[:, j, i]
 
     return WindData(time, lon, lat, u, v, vel, dir)
 
