@@ -117,31 +117,6 @@ def plot_wind_vel_timeseries(time:np.ndarray, dir:np.ndarray,
     else:
         return ax
 
-def plot_wind_vel_timeseries(time:np.ndarray, vel:np.ndarray,
-                            color='k', ax=None, show=True,
-                            output_path=None) -> plt.axes:
-
-    daily_time, daily_vel = get_daily_means(time, vel)
-
-    if ax is None:
-        fig = plt.figure(figsize=(10, 5))
-        ax = plt.axes()
-
-    ax.plot(daily_time, daily_vel, color=color)
-    ax.set_ylabel('Wind speed (m/s)')
-    ax.set_xlim([daily_time[0], daily_time[-1]])
-
-    dir_ticks, dir_ticklabels = get_wind_dir_and_text()
-
-    if output_path is not None:
-        log.info(f'Saving figure to: {output_path}')
-        plt.savefig(output_path, bbox_inches='tight', dpi=300)
-
-    if show is True:
-        plt.show()
-    else:
-        return ax
-
 def plot_wind_arrows_timeseries(time:np.ndarray, vel:np.ndarray, dir:np.ndarray, xlim=None,
                                 ax=None, show=True, output_path=None, vmin=0, vmax=15):
 
