@@ -1,16 +1,23 @@
 from tools import log
 from tools.files import get_dir_from_json, get_daily_files_in_time_range
 from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_daily_means, get_closest_time_index
-from plot_tools.basic_maps import plot_basic_map
-from location_info import LocationInfo, get_location_info
-from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea
-from particles import Particles
-from plot_tools.plots_particles import plot_histogram_arriving_in_deep_sea
+from tools.coordinates import get_transect_lons_lats_ds_from_json
+
 from data.kelp_data import KelpProbability
 from data.bathymetry_data import BathymetryData
-from data.wind_data import read_era5_wind_data, get_wind_vel_and_dir_in_point, get_wind_dir_and_text
-from plot_tools.plots_bathymetry import plot_contours
+from data.wind_data import read_era5_wind_data, get_wind_vel_and_dir_in_point, get_wind_dir_and_text, get_wind_data_in_point
 from data.roms_data import RomsData, RomsGrid, read_roms_data_from_multiple_netcdfs, read_roms_grid_from_netcdf
+from data.roms_data import get_roms_data_for_transect, get_depth_integrated_gradient_along_transect
+
+from plot_tools.basic_maps import plot_basic_map
+from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea
+from plot_tools.plots_particles import plot_histogram_arriving_in_deep_sea
+from plot_tools.plots_bathymetry import plot_contours
+from plot_tools.plots_roms import plot_depth_integrated_gradient_along_transect
+
+from location_info import LocationInfo, get_location_info
+from particles import Particles
+
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -177,24 +184,27 @@ def plot_wind_arrows_timeseries(time:np.ndarray, vel:np.ndarray, dir:np.ndarray,
         return ax
 
 def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea:float,
-                                                 time:np.ndarray, temp_c:np.ndarray, temp_o:np.ndarray,
-                                                 time_wind:np.ndarray, wind_vel:np.ndarray, wind_dir:np.ndarray,
+                                                 time:np.ndarray, gradient_values:np.ndarray, gradient_parameter:str,
+                                                 time_wind:np.ndarray, wind_vel:np.ndarray, wind_dir:np.ndarray, wind_u:np.ndarray,
                                                  color_temp='k', color_hist='#1b7931', shade_dswc=False,
                                                  color_vel='k', color_dir='r',
                                                  show=True, output_path=None):
 
+    daily_time_wind, daily_mean_wind_u = get_daily_means(time_wind, wind_u)
+    daily_time, daily_mean_gradient = get_daily_means(time, gradient_values)
+
     dswc_shading = '#e4e4e4'
     alpha = 0.4
-    dtemp = temp_c-temp_o
-    l_dswc = dtemp < 0
-    ylim2 = [-4, 4] # limits for temperature gradient
-    ylim3 = [0, 15] # limits for wind speed (m/s)
+    l_dswc = gradient_values < 0
+    ylim2 = [-4, 4] # limits for density gradient
+    ylim3 = [0, 15] # limits for onshore wind speed (m/s)
+    ylim4 = [-15, 0] # limits for offshore wind speed (m/s)
     xlim = [particles.time[0], particles.time[-1]]
 
     fig = plt.figure(figsize=(10, 8))
 
     # --- particles histogram ---
-    ax = plt.subplot(4, 1, (3, 4))
+    ax = plt.subplot(6, 1, (5, 6))
     ax = plot_histogram_arriving_in_deep_sea(particles, h_deep_sea, ax=ax, show=False, color=color_hist)
     if shade_dswc is True:
         # add shading where DSWC can occur
@@ -204,24 +214,24 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
     ax.set_xlim(xlim)
     ax.grid(True, linestyle='--', alpha=0.5)
 
-    # --- temperature gradient ---
-    ax2 = plt.subplot(4, 1, 2)
-    ax2 = plot_temperature_gradient_timeseries(time, temp_c, temp_o,
-                                               ax=ax2, color=color_temp, show=False)
+    # --- density gradient ---
+    ax2 = plt.subplot(6, 1, 4)
+    ax2 = plot_depth_integrated_gradient_along_transect(daily_time, daily_mean_gradient, gradient_parameter, ax=ax2, show=False)
     ax2.plot([time[0], time[-1]], [0, 0], '--k')
-    ax2.set_ylabel('Temperature\ngradient ($^o$C)', color=color_temp)
     ax2.set_xlim(xlim)
     ax2.set_xticklabels([])
-    ax2.set_ylim(ylim2)
+    # ax2.set_ylim(ylim2)
     ax2.grid(True, linestyle='--', alpha=0.5)
     # add shading where DSWC can occur
     if shade_dswc is True:
         ax2.fill_between(time, ylim2[0], where=l_dswc, facecolor=dswc_shading, alpha=alpha)
 
-    # --- wind ---
-    ax3 = plt.subplot(4, 1, 1)
-    ax3 = plot_wind_arrows_timeseries(time_wind, wind_vel, wind_dir, xlim=xlim,
-                                      ax=ax3, show=False)
+    # --- onshore wind ---
+    ax3 = plt.subplot(6, 1, 3)
+    l_onshore = daily_mean_wind_u>0
+    ax3.plot(daily_time_wind[l_onshore], daily_mean_wind_u[l_onshore], '-k')
+    ax3.set_ylabel('Onshore\nwind (m/s)')
+    ax3.set_ylim(ylim3)
     ax3.set_xlim(xlim)
     ax3.set_xticklabels([])
     ax3.grid(True, linestyle='--', alpha=0.5)
@@ -230,6 +240,30 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
         ylim3 = ax3.get_ylim()
         ax3.fill_between(time, ylim3[-1], where=l_dswc, facecolor=dswc_shading, alpha=alpha)
         ax3.set_ylim(ylim3)
+    
+    # --- offshore wind ---
+    ax4 = plt.subplot(6, 1, 2)
+    l_offshore = ~l_onshore
+    ax4.plot(daily_time_wind[l_offshore], daily_mean_wind_u[l_offshore], '-k')
+    ax4.set_ylabel('Offshore\nwind (m/s)')
+    ax4.set_ylim(ylim4)
+    ax4.set_xlim(xlim)
+    ax4.set_xticklabels([])
+    ax4.grid(True, linestyle='--', alpha=0.5)
+    # add shading where DSWC can occur
+    if shade_dswc is True:
+        ylim4 = ax4.get_ylim()
+        ax4.fill_between(time, ylim4[-1], where=l_dswc, facecolor=dswc_shading, alpha=alpha)
+        ax4.set_ylim(ylim4)
+
+    # --- wind arrows seabreeze style ---
+    ax5 = plt.subplot(6, 1, 1)
+    ax5 = plot_wind_arrows_timeseries(time_wind, wind_vel, wind_dir, xlim=xlim,
+                                      ax=ax5, show=False)
+    ax5.set_ylabel('Wind speed\n(m/s)')
+    ax5.set_xlim(xlim)
+    ax5.set_xticklabels([])
+
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
         plt.savefig(output_path, bbox_inches='tight', dpi=300)
@@ -318,51 +352,38 @@ def animate_particles_with_roms_field(particles:Particles, roms_input_dir:str,
 if __name__ == '__main__':
 
     location_info = get_location_info('cwa_perth')
-    
-    # # --- ROMS temperature gradient data ---
-    # input_dir = f'{get_dir_from_json("roms_data")}2017/'
-    # start_date = datetime(2017, 3, 1)
-    # end_date = datetime(2017, 8, 1)
-    # lon_c = 115.70 # coastal coordinate
-    # lat_c = -31.76
-    # lon_o = 114.47 # offshore coordinate
-    # lat_o = -31.80
-
-    # time, temp_c, temp_o = get_coastal_offshore_temperature_timeseries_from_roms_netcdfs(
-    #                                                                     input_dir, start_date, end_date,
-    #                                                                     lon_c, lat_c, lon_o, lat_o)
-    # df = pd.DataFrame(columns=['time', 'temp_c', 'temp_o'])
-    # df['time'] = time
-    # df['temp_c'] = temp_c
-    # df['temp_o'] = temp_o
-    # df.to_csv('test_roms_temperature_points.csv', index=False)
-
-    # df = pd.read_csv('test_roms_temperature_points.csv')
-    # time = pd.to_datetime(df['time'].values)
-    # temp_c = df['temp_c'].values
-    # temp_o = df['temp_o'].values
-
-    # # --- Wind data ---
-    # wind_data = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
-    # wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon_o, lat_o)
 
     # --- Particle tracking data ---
     h_deep_sea = 600 # m depth: max Leeuwin Undercurrent depth
     input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
     particles = Particles.read_from_netcdf(input_path)
     
-    # --- ROMS data ---
+    # --- ROMS transect and density gradient data ---
     roms_input_dir = f'{get_dir_from_json("roms_data")}2017/'
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 8, 1)
+    lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
+    roms_data = get_roms_data_for_transect(roms_input_dir, start_date, end_date, lon1, lat1, lon2, lat2)
+    density_gradient, density, distance, z = get_depth_integrated_gradient_along_transect(roms_data,
+                                                                                          'density',
+                                                                                          lon1, lat1,
+                                                                                          lon2, lat2,
+                                                                                          ds)
     
-    # -- plots ---
+    # --- Wind data ---
+    wind_data = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
+    wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon2, lat2)
+    wind_data_p = get_wind_data_in_point(wind_data, lon2, lat2)
+
+    # -- Plots ---
     output_dir = f'{get_dir_from_json("plots")}'
 
-    # time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
-    # output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{time_str}.jpg'
-    # plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, time, temp_c, temp_o,
-    #                                              wind_data.time, wind_vel, wind_dir,
-    #                                              output_path=output_path, show=False)
+    time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
+    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{time_str}.jpg'
+    plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, roms_data.time, density_gradient, 'density',
+                                                 wind_data.time, wind_vel, wind_dir, wind_data_p.u,
+                                                 output_path=output_path, show=False)
 
-    output_path = f'{output_dir}cwa-perth_animation_with_bottom_temp_2017-Mar-Aug.gif'
-    animate_particles_with_roms_field(particles, roms_input_dir, location_info, h_deep_sea, output_path=output_path)
+    # output_path = f'{output_dir}cwa-perth_animation_with_bottom_temp_2017-Mar-Aug.gif'
+    # animate_particles_with_roms_field(particles, roms_input_dir, location_info, h_deep_sea, output_path=output_path)
 
