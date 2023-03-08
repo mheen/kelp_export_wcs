@@ -264,7 +264,7 @@ def animate_roms_transect(roms_data:RomsData,
     else:
         plt.show()
 
-def plot_depth_integrated_gradient_along_transect(roms_data:RomsData, gradient_values:np.ndarray, parameter:str,
+def plot_depth_integrated_gradient_along_transect(time:np.ndarray, gradient_values:np.ndarray, parameter:str,
                                                   ax=None, show=True, output_path=None) -> plt.axes:
     if parameter == 'temp':
         ylabel = r'$\frac{\partial T}{\partial x}$'
@@ -279,10 +279,10 @@ def plot_depth_integrated_gradient_along_transect(roms_data:RomsData, gradient_v
         fig = plt.figure(figsize=(10, 5))
         ax = plt.axes()
 
-    ax.plot(roms_data.time, gradient_values, '-k')
-    ax.plot([roms_data.time[0], roms_data.time[-1]], [0, 0], '--k')
+    ax.plot(time, gradient_values, '-k')
+    ax.plot([time[0], time[-1]], [0, 0], '--k')
     
-    ax.set_xlim([roms_data.time[0], roms_data.time[-1]])
+    ax.set_xlim([time[0], time[-1]])
     ax.set_ylabel(ylabel, fontsize=20)
     ax.grid(True, linestyle='--', alpha=0.5)
 
@@ -469,10 +469,10 @@ if __name__ == '__main__':
     density_gradient, density, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'density',
                                                                                     lon1, lat1, lon2, lat2, ds)
 
-    plot_depth_integrated_gradient_along_transect(roms_data, density_gradient, 'density')
+    plot_depth_integrated_gradient_along_transect(roms_data.time, density_gradient, 'density')
 
-    temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'temp', lon1, lat1, lon2, lat2, ds)
-    salt_gradient, salt, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'salt', lon1, lat1, lon2, lat2, ds)
+    temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data.time, 'temp', lon1, lat1, lon2, lat2, ds)
+    salt_gradient, salt, distance, z = get_depth_integrated_gradient_along_transect(roms_data.time, 'salt', lon1, lat1, lon2, lat2, ds)
 
     def plot_gradient_single_instance(time, values_gradient, values, distance, z, t=0):
         fig = plt.figure(figsize=(7, 10))
