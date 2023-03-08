@@ -36,18 +36,18 @@ def add_month_to_time(timestamp:datetime, n_month:int) -> datetime:
     month = month % 12 + 1
     return datetime(year, month, timestamp.day)
 
-def get_daily_means(time:np.ndarray, values:np.ndarray) -> tuple:
+def get_daily_means(time:np.ndarray, values:np.ndarray, time_axis=0) -> tuple:
     daily_time = []
     daily_values = []
 
     n_days = (time[-1]-time[0]).days
 
     for n in range(n_days):
-        start_date = time[0]+timedelta(days=n)
+        start_date = datetime(time[0].year, time[0].month, time[0].day, 0, 0)+timedelta(days=n)
         end_date = start_date+timedelta(days=1)
         l_time = get_l_time_range(time, start_date, end_date)
         daily_time.append(start_date)
-        daily_values.append(np.nanmean(values[l_time]))
+        daily_values.append(np.nanmean(values[l_time], axis=time_axis))
 
     return np.array(daily_time), np.array(daily_values)
 
