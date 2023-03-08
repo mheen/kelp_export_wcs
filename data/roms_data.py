@@ -3,7 +3,7 @@ parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
 from tools.files import get_daily_files_in_time_range, get_files_in_dir, create_dir_if_does_not_exist
-from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_closest_time_index
+from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_transect_lons_lats_ds_from_json
 from tools import log
 from tools.seawater_density import calculate_density
@@ -392,7 +392,55 @@ def get_depth_integrated_gradient_along_transect(roms_data:RomsData, parameter:s
 
     gradient = np.nanmean(dvalues/np.diff(distance), axis=1) # mean gradient varying in time
 
-    return gradient, values, distance, z
+    return gradient, values, distance, z, roms_data.time
+
+def read_depth_integrated_gradient_data_from_netcdf(input_path:str) -> tuple:
+    log.info(f'Reading gradient data from: {input_path}')
+    nc = Dataset(input_path)
+
+    time_org = nc['time'][:].filled(fill_value=np.nan)
+    time_units = nc['time'].units
+    time = convert_time_to_datetime(time_org, time_units)
+
+    gradient = nc['gradient'][:].filled(fill_value=np.nan)
+    values = nc['values'][:].filled(fill_value=np.nan)
+
+    distance = nc['distance'][:].filled(fill_value=np.nan)
+    z = nc['z2d'][:].filled(fill_value=np.nan)
+
+    nc.close()
+
+    return gradient, values, distance, z, time
+
+def write_depth_integrated_gradient_data_to_netcdf(output_path:str, time:np.ndarray,
+                                                   gradient:np.ndarray,
+                                                   values:np.ndarray, distance:np.ndarray,
+                                                   z:np.ndarray):
+    
+    create_dir_if_does_not_exist(os.path.dirname(output_path))
+
+    log.info(f'Saving gradient data to: {output_path}')
+    nc = Dataset(output_path, 'w', format='NETCDF4')
+    
+    # create dimensions
+    nc.createDimension('time', len(time))
+    nc.createDimension('x', len(distance))
+    nc.createDimension('z', z.shape[0])
+    # create variables
+    nc_time = nc.createVariable('time', float, 'time', zlib=True)
+    nc_dist = nc.createVariable('distance', float, 'x', zlib=True)
+    nc_z = nc.createVariable('z2d', float, ('z', 'x'), zlib=True)
+    nc_grad = nc.createVariable('gradient', float, 'time', zlib=True)
+    nc_values = nc.createVariable('values', float, ('time', 'z', 'x'), zlib=True)
+    # fill variables
+    time_int, time_units = convert_datetime_to_time(time)
+    nc_time[:] = time_int
+    nc_time.units = time_units
+    nc_dist[:] = distance
+    nc_z[:] = z
+    nc_grad[:] = gradient
+    nc_values[:] = values
+    nc.close()
 
 def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat1:float,
                                   lon2:float, lat2:float, ds:float,
@@ -421,6 +469,3 @@ def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat
         command = [distutils.spawn.find_executable('ncks')] + ncks_options + [input_path, output_path]
         log.info(f'Extracting transect data, saving to: {output_path}')
         subprocess.run(command)
-
-if __name__ == '__main__':
-    read_roms_data_from_netcdf('/mnt/j/roms_perth/2017/cwa_his_20170301.nc')
