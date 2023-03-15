@@ -328,7 +328,7 @@ if __name__ == '__main__':
     location_info = get_location_info('cwa_perth')
 
     # --- Particle tracking data ---
-    h_deep_sea = 600 # m depth: max Leeuwin Undercurrent depth
+    h_deep_sea = 50 # m depth: max Leeuwin Undercurrent depth
     input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
     particles = Particles.read_from_netcdf(input_path)
     
@@ -348,7 +348,7 @@ if __name__ == '__main__':
     output_dir = f'{get_dir_from_json("plots")}'
 
     time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
-    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{time_str}.jpg'
+    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{h_deep_sea}m_{time_str}.jpg'
     plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, time, density_gradient, 'density',
                                                  wind_data.time, wind_vel, wind_dir, wind_data_p.u,
                                                  output_path=output_path, show=False)

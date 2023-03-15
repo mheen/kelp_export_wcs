@@ -178,21 +178,14 @@ def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
 
     n_arriving, _ = np.histogram(particles.time[t_arriving_ds], bins=time_days)
     
-    n_particles_in_simulation = particles.get_n_particles_in_simulation()
-    n_particles_in_simulation_per_day = []
-    for i in range(len(time_days)):
-        i_time = np.where(particles.time==time_days[i])[0][0]
-        n_particles_in_simulation_per_day.append(n_particles_in_simulation[i_time])
-    n_particles_in_simulation_per_day = np.array(n_particles_in_simulation_per_day)
-
     if ax is None:
         fig = plt.figure(figsize=(10, 4))
         ax = plt.axes()
 
-    ax.bar(time_days[:-1], n_arriving/n_particles_in_simulation_per_day[:-1]*100, color=color, edgecolor=edgecolor)
+    ax.bar(time_days[:-1], n_arriving, color=color, edgecolor=edgecolor)
 
     ax.set_xlim([time_days[0], time_days[-1]])
-    ax.set_ylabel('Particles passing\n shelf break (%)')
+    ax.set_ylabel(f'Particles passing\n {h_deep_sea} m (#)')
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
