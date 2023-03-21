@@ -21,8 +21,8 @@ class PtsConfig:
     input_dir: str
     output_dir: str
     n_thin_initial: int
-    dt: int
-    dt_out: int
+    dt: timedelta
+    dt_out: timedelta
     export_variables: list
     elements: str
     reader: str
@@ -48,8 +48,8 @@ def get_pts_config(input_path:str) -> PtsConfig:
     input_dir = get_dir_from_json(config[pts_section_header]['input_dir'])
     output_dir = get_dir_from_json(config[pts_section_header]['output_dir'])
     n_thin_inital = int(config[pts_section_header]['n_thin_initial'])
-    dt = int(config[pts_section_header]['dt'])
-    dt_out = int(config[pts_section_header]['dt_out'])
+    dt = timedelta(seconds=int(config[pts_section_header]['dt']))
+    dt_out = timedelta(seconds=int(config[pts_section_header]['dt_out']))
     export_variables = [i.strip() for i in config[pts_section_header]['export_variables'].split(',')]
     elements = config[pts_section_header]['elements']
     reader = config[pts_section_header]['reader']

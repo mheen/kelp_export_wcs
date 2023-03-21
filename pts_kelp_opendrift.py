@@ -1,5 +1,5 @@
 from config import PtsConfig, get_pts_config
-from tools.files import get_dir_from_json
+from tools.files import get_dir_from_json, create_dir_if_does_not_exist
 from tools import log
 from pts_tools import opendrift_reader_ROMS as reader_ROMS
 from pts_tools import opendrift_reader_ROMS_separate_gridfile as reader_ROMS_separate_grid
@@ -44,8 +44,9 @@ if config.grid_file is True:
                              If no separate file, set grid_file=False in config,
                              otherwise place grid file in correct location.''')
 input_files = f'{config.input_dir}{config.run_region}/{config.start_date.year}/{config.run_region}_*.nc'
-filename = f'{config.region_name}_{config.start_date.strftime("%Y-%b")}{config.end_date_run.strftime("%b")}'
+filename = f'{config.region_name}_{config.start_date.strftime("%b")}{config.end_date_run.strftime("%b%Y")}'
 output_file = f'{config.output_dir}{filename}.nc'
+create_dir_if_does_not_exist(os.path.dirname(output_file))
 log.info(f'Simulation output will be saved to: {output_file}')
 
 if config.reader == 'roms_reader' and config.grid_file == False:
@@ -64,7 +65,8 @@ else:
 o.add_reader(reader)
 
 # seed elements
-if len(lons0[0]) == 1:
+list_types = [list, np.ndarray]
+if type(lons0[0]) in list_types:
     for t, time0 in enumerate(times0):
         o.seed_elements(lon=lons0[t], lat=lats0[t], time=time0, z=z_seed)
 else:
@@ -80,6 +82,6 @@ o.set_config('general:use_auto_landmask', config.use_auto_landmask)
 o.set_config('general:coastline_action', config.coastline_action)
 
 # run simulation
-run_duration = (config.end_date_run-config.start_date).days
+run_duration = config.end_date_run-config.start_date
 o.run(duration=run_duration, time_step=config.dt, time_step_output=config.dt_out,
       export_variables=config.export_variables, outfile=output_file)
