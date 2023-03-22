@@ -17,7 +17,6 @@
 import numpy as np
 from opendrift.models.oceandrift import Lagrangian3DArray, OceanDrift
 import logging
-from suntimes import SunTimes
 
 logger = logging.getLogger(__name__)
 
