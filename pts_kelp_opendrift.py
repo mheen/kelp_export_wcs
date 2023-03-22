@@ -4,6 +4,7 @@ from tools import log
 from pts_tools import opendrift_reader_ROMS as reader_ROMS
 from pts_tools import opendrift_reader_ROMS_separate_gridfile as reader_ROMS_separate_grid
 from pts_tools.opendrift_bottomdrifters import BottomDrifters
+from pts_tools.opendrift_bottomthresholddrifters import BottomThresholdDrifters
 from pts_tools.releases import get_n_daily_release_times
 from data.kelp_data import generate_random_releases_based_on_probability
 from datetime import datetime, timedelta
@@ -11,7 +12,7 @@ import numpy as np
 import sys
 import os
 
-config_file = 'configs/cwa_perth.ini'
+config_file = sys.argv[1]
 
 config = get_pts_config(config_file)
 
@@ -27,7 +28,7 @@ def get_releases(config:PtsConfig):
     lats0 = []
     n_particles = 0
     for t in times0:
-        lon0, lat0 = generate_random_releases_based_on_probability(rng, release_file, n_thin=config.n_thin_initial)
+        lon0, lat0 = generate_random_releases_based_on_probability(rng, release_file, n_thin=config.n_thin_initial, log_info=False)
         lons0.append(lon0)
         lats0.append(lat0)
         n_particles += len(lon0)
@@ -44,8 +45,8 @@ if config.grid_file is True:
                              If no separate file, set grid_file=False in config,
                              otherwise place grid file in correct location.''')
 input_files = f'{config.input_dir}{config.run_region}/{config.start_date.year}/{config.run_region}_*.nc'
-filename = f'{config.region_name}_{config.start_date.strftime("%b")}{config.end_date_run.strftime("%b%Y")}'
-output_file = f'{config.output_dir}{filename}.nc'
+filename = f'{config.region_name}_{config.start_date.strftime("%b")}{config.end_date_run.strftime("%b%Y")}_{config.extra_description}'
+output_file = f'{config.output_dir}{config.sub_output_dir}{filename}.nc'
 create_dir_if_does_not_exist(os.path.dirname(output_file))
 log.info(f'Simulation output will be saved to: {output_file}')
 
@@ -59,6 +60,9 @@ else:
 # initialise elements
 if config.elements == 'bottom_drifters':
     o = BottomDrifters(loglevel=20)
+    z_seed = 'seafloor'
+elif config.elements == 'bottom_threshold_drifters':
+    o = BottomThresholdDrifters(loglevel=20)
     z_seed = 'seafloor'
 else:
     raise ValueError(f'Unknown elements {config.elements} requested.')
@@ -80,6 +84,7 @@ o.set_config('drift:vertical_mixing', config.vertical_mixing)
 o.set_config('drift:horizontal_diffusivity', config.horizontal_diffusivity)
 o.set_config('general:use_auto_landmask', config.use_auto_landmask)
 o.set_config('general:coastline_action', config.coastline_action)
+o.set_config('seed:ocean_only', True)
 
 # run simulation
 run_duration = config.end_date_run-config.start_date
