@@ -377,7 +377,7 @@ def plot_particle_locations(particles:Particles, location_info:LocationInfo,
         ax.plot(particles.lon0, particles.lat0, '.', color=color)
     elif t == 0:
         ax.plot(particles.lon0, particles.lat0, '.', color=color)
-    elif t != 0:
+    elif t is not None and t != 0:
         ax.plot(particles.lon[:, t], particles.lat[:, t], '.', color=color)
     elif t is None and time is not None:
         t = get_closest_time_index(particles.time, time)
