@@ -33,6 +33,8 @@ class PtsConfig:
     use_auto_landmask: bool
     coastline_action: str
     grid_file: bool
+    extra_description: str
+    sub_output_dir: str
 
 def get_pts_config(input_path:str) -> PtsConfig:
     config = configparser.ConfigParser()
@@ -60,14 +62,15 @@ def get_pts_config(input_path:str) -> PtsConfig:
     use_auto_landmask = bool(0 if config[pts_section_header]['use_auto_landmask'].lower() == 'false' else 1)
     coastline_action = config[pts_section_header]['coastline_action']
     grid_file = bool(0 if config[pts_section_header]['grid_file'].lower == 'false' else 1)
+    extra_description = config[pts_section_header]['extra_description']
+    sub_output_dir = config[pts_section_header]['sub_output_dir']
 
     pts_config = PtsConfig(start_date, end_date_releases, end_date_run, release_region, run_region, region_name,
                            input_dir, output_dir, n_thin_inital, dt, dt_out, export_variables, elements,
                            reader, advection_scheme, vertical_advection, vertical_mixing, horizontal_diffusivity,
-                           use_auto_landmask, coastline_action, grid_file)
+                           use_auto_landmask, coastline_action, grid_file, extra_description, sub_output_dir)
 
     return pts_config
 
 if __name__ == '__main__':
     config = get_pts_config('configs/cwa_perth.ini')
-    config.start_date
