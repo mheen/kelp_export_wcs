@@ -14,7 +14,8 @@ class Particles:
                  z:np.ndarray,
                  salt:np.ndarray,
                  temp:np.ndarray,
-                 age:np.ndarray):
+                 age:np.ndarray,
+                 moving:np.ndarray):
         self.time = time
         self.status = status # [trajectory, time] # 0: active, 1: stranded, -999: not active yet or out of domain
         self.lon = lon # [trajectory, time]
@@ -25,6 +26,8 @@ class Particles:
         self.temp = temp # [trajectory, time]
         
         self.age = age # [trajectory, time] (days)
+
+        self.moving = moving # [trajectory, time] # 0: not moving, 1: moving
 
         self.add_initial_positions()
 
@@ -54,7 +57,11 @@ class Particles:
         salt = np.copy(self.salt[l_released, :][:, l_time])
         temp = np.copy(self.temp[l_released, :][:, l_time])
         age = np.copy(self.age[l_released, :][:, l_time])
-        return Particles(time, status, lon, lat, z, salt, temp, age)
+        if moving is not None:
+            moving = np.copy(self.moving[l_released, :][:, l_time])
+        else:
+            moving = None
+        return Particles(time, status, lon, lat, z, salt, temp, age, moving)
 
     def filter_based_on_release_depth(self, h_min:float, h_max:float):
         l_depth = np.logical_and(self.z0<-h_min, self.z0>=-h_max)
@@ -69,7 +76,12 @@ class Particles:
 
         age = self.age[l_depth, :]
 
-        return Particles(self.time, status, lon, lat, z, salt, temp, age)
+        if moving is not None:
+            moving = self.moving[l_depth, :]
+        else:
+            moving = None
+
+        return Particles(self.time, status, lon, lat, z, salt, temp, age, moving)
 
     def filter_based_on_release_lon_lat_range(self, lon_range:list, lat_range:list):
         l_lon_range = np.logical_and(self.lon0>=lon_range[0], self.lon0<=lon_range[1])
@@ -86,7 +98,12 @@ class Particles:
 
         age = self.age[l_range, :]
 
-        return Particles(self.time, status, lon, lat, z, salt, temp, age)
+        if moving is not None:
+            moving = self.moving[l_range, :]
+        else:
+            moving = None
+
+        return Particles(self.time, status, lon, lat, z, salt, temp, age, moving)
 
     def get_l_deep_sea(self, h_deep_sea:float, remain=False) -> np.ndarray:
         
@@ -170,14 +187,25 @@ class Particles:
         lat = netcdf['lat'][:].filled(fill_value=np.nan)
         z = netcdf['z'][:].filled(fill_value=np.nan)
 
-        salt = netcdf['sea_water_salinity'][:].filled(fill_value=np.nan)
-        temp = netcdf['sea_water_temperature'][:].filled(fill_value=np.nan)
+        if 'sea_water_salinity' in netcdf.variables:
+            salt = netcdf['sea_water_salinity'][:].filled(fill_value=np.nan)
+        else:
+            salt = None
+        if 'sea_water_temperature' in netcdf.variables:
+            temp = netcdf['sea_water_temperature'][:].filled(fill_value=np.nan)
+        else:
+            temp = None
 
         age = netcdf['age_seconds'][:].filled(fill_value=np.nan)/(24*60*60) # convert age in seconds to age in days
 
+        if 'moving' in netcdf.variables:
+            moving = netcdf['moving'][:].filled(fill_value=-999)
+        else:
+            moving = None
+
         netcdf.close()
 
-        return Particles(time, status, lon, lat, z, salt, temp, age)
+        return Particles(time, status, lon, lat, z, salt, temp, age, moving)
 
 class DensityGrid:
     def __init__(self, lon_range:list, lat_range:list, dx:float):
