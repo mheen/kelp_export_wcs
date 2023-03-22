@@ -144,9 +144,7 @@ class RomsData:
     salt: np.ndarray
     density: np.ndarray
 
-def get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
-    full_grid = read_roms_grid_from_netcdf(input_path)
-
+def get_roms_data_from_netcdf(full_grid:RomsGrid, input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
     i0 = None
     i1 = None
     j0 = None
@@ -299,10 +297,17 @@ def get_roms_data_from_netcdf(input_path:str, lon_range:list, lat_range:list, ti
     return time, grid, u_east, v_north, temp, salt, density
 
 def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
-    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(input_path,
-                                                                         lon_range,
-                                                                         lat_range,
-                                                                         time_range)
+    try:
+        full_grid = read_roms_grid_from_netcdf(input_path)
+    except:
+        grid_file = f'{os.path.abspath(os.path.join(os.path.dirname(input_path), os.pardir))}/grid.nc'
+        warnings.warn(f'No grid information found in {input_path}. Trying separate grid file instead: {grid_file}')
+        full_grid = read_roms_grid_from_netcdf(grid_file)
+    
+    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(full_grid, input_path,
+                                                                                 lon_range,
+                                                                                 lat_range,
+                                                                                 time_range)
 
     return RomsData(time, grid, u_east, v_north, temp, salt, density)
 
@@ -312,10 +317,16 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
 
     nc_files = get_daily_files_in_time_range(input_dir, start_time, end_time, 'nc')
 
-    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(nc_files[0], lon_range, lat_range, time_range)
+    try:
+        full_grid = read_roms_grid_from_netcdf(nc_files[0])
+    except:
+        grid_file = f'{os.path.abspath(os.path.join(os.path.dirname(nc_files[0]), os.pardir))}/grid.nc'
+        warnings.warn(f'No grid information found in {nc_files[0]}. Trying separate grid file instead: {grid_file}')
+        full_grid = read_roms_grid_from_netcdf(grid_file)
+    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(full_grid, nc_files[0], lon_range, lat_range, time_range)
 
     for i in range(1, len(nc_files)):
-        t, _, u, v, tp, s, d = get_roms_data_from_netcdf(nc_files[i], lon_range, lat_range, time_range)
+        t, _, u, v, tp, s, d = get_roms_data_from_netcdf(full_grid, nc_files[i], lon_range, lat_range, time_range)
         time = np.concatenate((time, t))
         u_east = np.concatenate((u_east, u))
         v_north = np.concatenate((v_north, v))
