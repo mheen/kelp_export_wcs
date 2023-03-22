@@ -54,8 +54,9 @@ class KelpProbability:
             return ax
 
     @staticmethod
-    def read_from_tiff(input_path:str) -> tuple:
-        log.info(f'Reading kelp probability map from: {input_path}')
+    def read_from_tiff(input_path:str, log_info=True) -> tuple:
+        if log_info is True:
+            log.info(f'Reading kelp probability map from: {input_path}')
 
         dataset = rasterio.open(input_path)
 
@@ -71,11 +72,12 @@ class KelpProbability:
 
         return KelpProbability(lon, lat, prob)
 
-def generate_random_releases_based_on_probability(rng: np.random.default_rng, input_path:str, n_thin=25) -> tuple:
-    log.info(f'''Getting kelp release locations based on probability
-             from probability map: {input_path}''')
+def generate_random_releases_based_on_probability(rng: np.random.default_rng, input_path:str,
+                                                  n_thin=25, log_info=True) -> tuple:
+    if log_info is True:
+        log.info(f'''Getting kelp release locations based on probability: {input_path}''')
 
-    kelp_prob = KelpProbability.read_from_tiff(input_path)
+    kelp_prob = KelpProbability.read_from_tiff(input_path, log_info=log_info)
     # random release depending on kelp probability
     random_ints_prob = rng.integers(1, high=100, size=kelp_prob.prob.shape)
     l_prob = random_ints_prob >= kelp_prob.prob

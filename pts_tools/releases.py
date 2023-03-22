@@ -28,7 +28,7 @@ def get_n_hourly_release_times(year:int, month:int, day:int, n_months=1, n_hours
     return np.array(release_times)
 
 def get_n_daily_release_times(start_date:datetime, end_date:datetime) -> np.ndarray:
-    n_days = (end_date-start_date).days
+    n_days = (end_date-start_date).days+1
 
     release_times = []
     for i in range(n_days):
