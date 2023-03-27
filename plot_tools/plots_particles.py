@@ -16,6 +16,7 @@ from matplotlib.lines import Line2D
 import matplotlib.animation as animation
 import matplotlib.dates as mdates
 import matplotlib.units as munits
+from matplotlib.colors import LinearSegmentedColormap, BoundaryNorm
 import cartopy.crs as ccrs
 from warnings import warn
 import numpy as np
@@ -443,6 +444,53 @@ def plot_initial_particle_density_entering_deep_sea(particles:Particles, locatio
         plt.show()
     else:
         return ax
+
+def get_colormap_reds(n):
+    colors = ['#fece6b', '#fd8e3c', '#f84627', '#d00d20', '#b50026', '#950026', '#830026']
+    return colors[:n]
+
+def get_colormap_reds_blues(n):
+    n = n // 2
+    reds = ['#ffae82', '#eb7352', '#c73b33', '#950026']
+    blues = ['#0a2a6a', '#3050a1', '#5f7acd', '#93a8ed']
+    colors = blues[:n]
+    for i in range(n):
+        colors.append(reds[i])
+    return colors
+
+def plot_particle_density(grid:DensityGrid, density:np.ndarray,
+                          cmap='Reds', ranges=[10**x for x in range(0, 7)],
+                          c_label_description='Particle density',
+                          ax=None, show=True, output_path=None):
+    
+    if ax is None:
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        ax = plot_basic_map(ax, location_info)
+
+        bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
+        ax = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
+
+    x, y = np.meshgrid(grid.lon, grid.lat)
+    density[density==0] = np.nan
+
+    if cmap == 'RedBlue':
+        colors = get_colormap_reds_blues(len(ranges))
+    else:
+        colors = get_colormap_reds(len(ranges))
+    cm = LinearSegmentedColormap.from_list('cm_log_density', colors, N=len(ranges))
+    norm = BoundaryNorm(ranges, ncolors=len(ranges))
+    c = ax.pcolormesh(x, y, density, cmap=cm, norm=norm, transform=ccrs.PlateCarree())
+    cbar = plt.colorbar(c)
+    cbar.set_label(f'{c_label_description}\n(#/{grid.dx}$^o$ grid cell)')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax, cbar, c
 
 if __name__ == '__main__':
     location_info = get_location_info('cwa_perth')
