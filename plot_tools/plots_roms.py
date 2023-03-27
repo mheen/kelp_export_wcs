@@ -332,26 +332,71 @@ def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
     if show is True:
         plt.show()
 
-def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, end_date:datetime,
-                                           thres_vel:float, location_info:LocationInfo, s=0, cmap='viridis',
-                                           ax=None, show=True, output_path=None):
-
+def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_date:datetime,
+                                       thres_vel:float, thres_sd:float, thres_name:str,
+                                       location_info:LocationInfo,
+                                       output_path_his:str, output_path_map:str,
+                                       s=0,
+                                       cmap='viridis', color='#346ca7', edgecolor='none'):
+    
     roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 
     ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
 
+    vel_bins = np.arange(0, 1.5, 0.01)
+    n_vel = np.zeros(len(vel_bins)-1)
     n_total_times = 0
     n_exceed = np.zeros(roms_grid.lon.shape)
 
     for ncfile in ncfiles:
         roms_data = read_roms_data_from_netcdf(ncfile)
 
-        vel = np.sqrt(roms_data.u_east[:, s, :, :]**2+roms_data.v_north[:, s, :, :]**2)
+        u = roms_data.u_east[:, s, :, :]
+        v = roms_data.v_north[:, s, :, :]
+        vel = np.sqrt(u**2+v**2)
+
+        n_vel_single, _ = np.histogram(vel[~np.isnan(vel)], bins=vel_bins)
+        n_vel += n_vel_single
 
         n_total_times += len(roms_data.time)
         n_exceed += np.sum(vel>thres_vel, axis=0)
 
+        roms_data = None
+
     p_exceed = n_exceed/n_total_times*100
+
+    plot_exceedance_threshold_velocity_histogram(input_dir, start_date, end_date, thres_vel, thres_sd, thres_name,
+                                                 vel_bins=vel_bins, n_vel=n_vel,
+                                                 color=color, edgecolor=edgecolor,
+                                                 show=False, output_path=output_path_his)
+
+    plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info,
+                                           roms_grid=roms_grid, p_exceed=p_exceed,
+                                           cmap=cmap, show=False, output_path=output_path_map)
+
+def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, end_date:datetime,
+                                           thres_vel:float, location_info:LocationInfo, s=0, cmap='viridis',
+                                           ax=None, show=True, output_path=None,
+                                           roms_grid=None, p_exceed=None):
+
+    if roms_grid is None:
+        roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+
+    if p_exceed is None:
+        ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
+
+        n_total_times = 0
+        n_exceed = np.zeros(roms_grid.lon.shape)
+
+        for ncfile in ncfiles:
+            roms_data = read_roms_data_from_netcdf(ncfile)
+
+            vel = np.sqrt(roms_data.u_east[:, s, :, :]**2+roms_data.v_north[:, s, :, :]**2)
+
+            n_total_times += len(roms_data.time)
+            n_exceed += np.sum(vel>thres_vel, axis=0)
+
+        p_exceed = n_exceed/n_total_times*100
 
     if ax is None:
         ax = plt.axes(projection=ccrs.PlateCarree())
@@ -371,26 +416,28 @@ def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, e
     else:
         return ax
 
-def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_date:datetime,
-                                       thres_vel:float, thres_sd:float, thres_name:str, s=0, # bottom layer
-                                       color='#346ca7', edgecolor='none',
-                                       ax=None, show=True, output_path=None):
+def plot_exceedance_threshold_velocity_histogram(input_dir:str, start_date:datetime, end_date:datetime,
+                                                 thres_vel:float, thres_sd:float, thres_name:str, s=0, # bottom layer
+                                                 color='#346ca7', edgecolor='none',
+                                                 ax=None, show=True, output_path=None,
+                                                 vel_bins=None, n_vel=None):
 
-    vel_bins = np.arange(0, 1.5, 0.01)
-    n_vel = np.zeros(len(vel_bins)-1)
+    if vel_bins is None or n_vel is None:
+        vel_bins = np.arange(0, 1.5, 0.01)
+        n_vel = np.zeros(len(vel_bins)-1)
 
-    ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
+        ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
 
-    for ncfile in ncfiles:
-        roms_data = read_roms_data_from_netcdf(ncfile)
+        for ncfile in ncfiles:
+            roms_data = read_roms_data_from_netcdf(ncfile)
 
-        u = roms_data.u_east[:, s, :, :]
-        v = roms_data.v_north[:, s, :, :]
-        vel = np.sqrt(u**2+v**2)
+            u = roms_data.u_east[:, s, :, :]
+            v = roms_data.v_north[:, s, :, :]
+            vel = np.sqrt(u**2+v**2)
 
-        n_vel_single, _ = np.histogram(vel[~np.isnan(vel)], bins=vel_bins)
+            n_vel_single, _ = np.histogram(vel[~np.isnan(vel)], bins=vel_bins)
 
-        n_vel += n_vel_single
+            n_vel += n_vel_single
 
     if ax is None:
         fig = plt.figure(figsize=(10, 5))
