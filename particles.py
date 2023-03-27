@@ -76,7 +76,7 @@ class Particles:
 
         age = self.age[l_depth, :]
 
-        if moving is not None:
+        if self.moving is not None:
             moving = self.moving[l_depth, :]
         else:
             moving = None
@@ -98,7 +98,7 @@ class Particles:
 
         age = self.age[l_range, :]
 
-        if moving is not None:
+        if self.moving is not None:
             moving = self.moving[l_range, :]
         else:
             moving = None
@@ -218,27 +218,19 @@ class DensityGrid:
     def get_index(self, lon_p:np.ndarray, lat_p:np.ndarray) -> tuple:
         lon_index = np.floor((lon_p-self.lon_range[0])*1/self.dx)
         l_index_lon_over = lon_index >= abs(self.lon_range[1]-self.lon_range[0])*1/self.dx
-        if sum(l_index_lon_over) != 0:
-            lon_index[l_index_lon_over] = np.nan
-            warn(f'''Locations out of range of DensityGrid, using NaNs for these indices.
-                 Consider extending the range of the grid instead (max lon): lon_range={self.lon_range}''')
         l_index_lon_under = lon_index < 0
-        if sum(l_index_lon_under) != 0:
-            lon_index[l_index_lon_under] = np.nan
-            warn(f'''Locations out of range of DensityGrid, using NaNs for these indices.
-                 Consider extending the range of the grid instead (min lon): lon_range={self.lon_range}''')
 
         lat_index = np.floor((lat_p-self.lat_range[0])*1/self.dx)
         l_index_lat_over = lat_index >= abs(self.lat_range[1]-self.lat_range[0])*1/self.dx
-        if sum(l_index_lat_over):
-            lat_index[l_index_lat_over] = np.nan
-            warn(f'''Locations out of range of DensityGrid, using NaNs for these indices.
-                 Consider extending the range of the grid instead (max lat): lat_range={self.lat_range}''')
         l_index_lat_under = lat_index < 0
-        if sum(l_index_lat_under):
-            lat_index[l_index_lat_under] = np.nan
-            warn(f'''Locations out of range of DensityGrid, using NaNs for these indices.
-                 Consider extending the range of the grid instead (min lat): lat_range={self.lat_range}''')
+
+        l_invalid_index = l_index_lon_over+l_index_lon_under+l_index_lat_over+l_index_lat_under
+
+        if np.sum(l_invalid_index) != 0:
+            warn(f'''Locations out of range of DensityGrid, using NaNs for these indices.''')
+
+        lon_index[l_invalid_index] = np.nan
+        lat_index[l_invalid_index] = np.nan
 
         return lon_index, lat_index
 
