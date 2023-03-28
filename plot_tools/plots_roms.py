@@ -36,7 +36,10 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax = plot_basic_map(ax, location_info)
 
-    t = get_closest_time_index(roms_data.time, time)
+    if hasattr(roms_data, 'time'):
+        t = get_closest_time_index(roms_data.time, time)
+    else:
+        t = 0
 
     if hasattr(roms_data, parameter):
         values = getattr(roms_data, parameter)
@@ -59,7 +62,13 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
     else:
         raise ValueError(f'Unknown parameter {parameter} in RomsData')
 
-    c = ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, values, cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+    if hasattr(roms_data, 'lon'):
+        lon = roms_data.lon
+        lat = roms_data.lat
+    elif hasattr(roms_data.grid, 'lon'):
+        lon = roms_data.grid.lon
+        lat = roms_data.grid.lat
+    c = ax.pcolormesh(lon, lat, values, cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
     cbar = plt.colorbar(c)
     cbar.set_label(clabel)
 
