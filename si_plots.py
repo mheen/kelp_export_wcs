@@ -2,7 +2,7 @@ from location_info import get_location_info, LocationInfo
 from tools.files import get_dir_from_json
 from tools import log
 from data.bathymetry_data import BathymetryData
-from data.roms_data import read_roms_grid_from_netcdf
+from data.roms_data import read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
 from plot_tools.general import add_subtitle
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
@@ -24,6 +24,8 @@ plots_dir = f'{get_dir_from_json("plots")}si/'
 location_info = get_location_info('cwa_perth')
 time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
 
+roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+
 # ---------------------------------------------------------------------------------
 # ROMS
 # ---------------------------------------------------------------------------------
@@ -39,7 +41,6 @@ time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
 #                                    location_info, output_exceedance_his, output_exceedance_map)
 
 # # --- Bottom layer depth ---
-# roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # output_bottom_layer_depth = f'{plots_dir}/roms_bottom_layer_depth.jpg'
 # layer_depth = roms_grid.z[1, :, :]-roms_grid.z[0, :, :]
 
@@ -86,6 +87,20 @@ time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
 # ax.set_ylim([0.0, 20.0])
 # ax.legend(loc='upper left', title='Bottom layer thickness (m):')
 # plt.savefig(output_logarithmic_bottom_profiles, bbox_inches='tight', dpi=300)
+
+# # --- Logarithmic bottom layer correction spatial variation ---
+# z_drift = 0.5 # m -> assuming that seaweed would drift at 50 cm above seafloor
+# output_logarithmic_correction = f'{plots_dir}logarithmic_correction_{z_drift}m_above_seafloor.jpg'
+# u_corr = get_vel_correction_factor_for_specific_height_above_sea_floor(z_drift)
+
+# ax = plt.axes(projection=ccrs.PlateCarree())
+# ax = plot_basic_map(ax, location_info)
+# ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
+# c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, u_corr)
+# cbar = plt.colorbar(c)
+# cbar.set_label('Correction factor to current velocities')
+# ax.set_title(f'Drift at {z_drift} m above sea floor')
+# plt.savefig(output_logarithmic_correction, bbox_inches='tight', dpi=300)
 
 # ---------------------------------------------------------------------------------
 # PARTICLES
