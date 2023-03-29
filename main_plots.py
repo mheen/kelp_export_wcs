@@ -11,7 +11,7 @@ from data.roms_data import get_roms_data_for_transect, get_depth_integrated_grad
 
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea
-from plot_tools.plots_particles import plot_histogram_arriving_in_deep_sea
+from plot_tools.plots_particles import plot_histogram_arriving_in_deep_sea, plot_histogram_moving_deeper
 from plot_tools.plots_bathymetry import plot_contours
 from plot_tools.plots_roms import plot_depth_integrated_gradient_along_transect
 
@@ -158,7 +158,7 @@ def plot_wind_arrows_timeseries(time:np.ndarray, vel:np.ndarray, dir:np.ndarray,
     else:
         return ax
 
-def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea:float,
+def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deeper:float,
                                                  time:np.ndarray, gradient_values:np.ndarray, gradient_parameter:str,
                                                  time_wind:np.ndarray, wind_vel:np.ndarray, wind_dir:np.ndarray, wind_u:np.ndarray,
                                                  color_temp='k', color_hist='#1b7931', shade_dswc=False,
@@ -178,7 +178,7 @@ def plot_particles_arriving_with_dswc_conditions(particles:Particles, h_deep_sea
 
     # --- particles histogram ---
     ax = plt.subplot(6, 1, (5, 6))
-    ax = plot_histogram_arriving_in_deep_sea(particles, h_deep_sea, ax=ax, show=False, color=color_hist)
+    ax = plot_histogram_moving_deeper(particles, h_deeper, ax=ax, show=False, color=color_hist)
     if shade_dswc is True:
         # add shading where DSWC can occur
         ylim1 = ax.get_ylim()
@@ -328,8 +328,8 @@ if __name__ == '__main__':
     location_info = get_location_info('cwa_perth')
 
     # --- Particle tracking data ---
-    h_deep_sea = 50 # m depth: max Leeuwin Undercurrent depth
-    input_path = f'{get_dir_from_json("opendrift")}cwa-perth_2017-Mar-Aug.nc'
+    h_deeper = 50 # m
+    input_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     particles = Particles.read_from_netcdf(input_path)
     
     # --- ROMS transect and density gradient data ---
@@ -339,7 +339,7 @@ if __name__ == '__main__':
     density_gradient, density, distance, z, time = read_depth_integrated_gradient_data_from_netcdf(transect_input_path)
     
     # --- Wind data ---
-    wind_data_hourly = read_era5_wind_data(f'{get_dir_from_json("wind_data")}ERA5_winds_2017.nc')
+    wind_data_hourly = read_era5_wind_data(f'{get_dir_from_json("era5_data")}era5_roms_forcing_20170101.nc')
     wind_data = get_daily_mean_wind_data(wind_data_hourly)
     wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon2, lat2)
     wind_data_p = get_wind_data_in_point(wind_data, lon2, lat2)
@@ -348,8 +348,8 @@ if __name__ == '__main__':
     output_dir = f'{get_dir_from_json("plots")}'
 
     time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
-    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{h_deep_sea}m_{time_str}.jpg'
-    plot_particles_arriving_with_dswc_conditions(particles, h_deep_sea, time, density_gradient, 'density',
+    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{h_deeper}m_deeper_{time_str}.jpg'
+    plot_particles_arriving_with_dswc_conditions(particles, h_deeper, time, density_gradient, 'density',
                                                  wind_data.time, wind_vel, wind_dir, wind_data_p.u,
                                                  output_path=output_path, show=False)
 

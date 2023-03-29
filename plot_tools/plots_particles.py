@@ -168,6 +168,34 @@ def plot_matrix_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
     else:
         return ax
 
+def plot_histogram_moving_deeper(particles:Particles, h_deeper:float,
+                                 ax=None, show=True, output_path=None,
+                                 color='#1b7931', edgecolor='none'):
+    p_deeper, t_deeper = particles.get_indices_moved_deeper(h_deeper)
+
+    n_days = (particles.time[-1]-particles.time[0]).days
+    time_days = np.array([particles.time[0]+timedelta(days=n) for n in range(n_days)])
+
+    n_deeper, _ = np.histogram(particles.time[t_deeper], bins=time_days)
+
+    if ax is None:
+        fig = plt.figure(figsize=(10, 4))
+        ax = plt.axes()
+
+    ax.bar(time_days[:-1], n_deeper, color=color, edgecolor=edgecolor)
+
+    ax.set_xlim([time_days[0], time_days[-1]])
+    ax.set_ylabel(f'Particles moving {h_deeper} m deeper (#)')
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
 def plot_histogram_arriving_in_deep_sea(particles:Particles, h_deep_sea:float,
                                         ax=None, show=True, output_path=None,
                                         color='#1b7931', edgecolor='none'):
