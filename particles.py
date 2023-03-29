@@ -105,6 +105,16 @@ class Particles:
 
         return Particles(self.time, status, lon, lat, z, salt, temp, age, moving)
 
+    def get_indices_moved_deeper(self, h_deeper:float) -> np.ndarray:
+        pass_depth = self.z0-h_deeper
+        l_deeper = self.z <= np.repeat(pass_depth[:, np.newaxis], len(self.time), axis=1)
+
+        p_deeper, t_deeper = np.where(l_deeper)
+        p_first, i_sort = np.unique(p_deeper, return_index=True)
+        t_first = t_deeper[i_sort]
+        
+        return p_first, t_first
+        
     def get_l_deep_sea(self, h_deep_sea:float, remain=False) -> np.ndarray:
         
         if remain is True:
