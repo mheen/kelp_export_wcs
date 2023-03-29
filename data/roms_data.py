@@ -16,6 +16,7 @@ import distutils.spawn
 import subprocess
 from scipy import spatial
 import warnings
+import shutil
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     
@@ -480,3 +481,58 @@ def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat
         command = [distutils.spawn.find_executable('ncks')] + ncks_options + [input_path, output_path]
         log.info(f'Extracting transect data, saving to: {output_path}')
         subprocess.run(command)
+
+def get_vel_correction_factor_for_specific_height_above_sea_floor(z_req:float, grid_path='input/cwa_roms_grid.nc'):
+    '''Calculates correction factor that needs to be applied to velocities assuming a logarithmic
+    vertical velocity profile in the bottom layer.
+    
+    Calculation assumes:
+    u(z) = u*/kappa*log(z/z0)
+    u* = sqrt(tau_b)
+    tau_b = kappa**2*u_sigma0**2/log**2(z_sigma0/z0) : bottom stress calculated from velocity in lowest layer
+
+    Using u_sigma0 = 1, we calculate a spatially varying correction factor for the requested depth.
+    '''
+    kappa = 0.41 # von Karman constant
+    z0 = 1.65*10**(-5) # m bottom roughness (can potentially vary in space but is kept constant in ROMS)
+    roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+    z_sigma0 = roms_grid.z[1, :, :]-roms_grid.z[0, :, :] # height of bottom layer above sea floor
+    u_sigma0 = 1 # m/s -> using this instead of actual velocity to get a correction factor
+    tau_b = kappa**2*u_sigma0**2/(np.log(z_sigma0/z0))**2
+    u_star = np.sqrt(tau_b)
+
+    u_corr = u_star/kappa*np.log(z_req/z0)
+    # if z_req > z_sigma0 then the correction will be > 1. However, we assume that if this is the case,
+    # currents are beyond the logarithmic layer and so the ROMS velocity and not the log-layer velocity
+    # should hold. So, we set u_corr to be 1 in these cases.
+    u_corr[u_corr>1.0] = 1.0
+
+    return u_corr
+
+def write_roms_velocities_at_specific_depth(input_dir:str, output_dir:str, z_req:float):
+    '''Assuming a logarithmic velocity profile in the bottom layer, calculate what the
+    velocity would be at a specific requested depth.
+    '''
+
+    create_dir_if_does_not_exist(output_dir)
+    corr = get_vel_correction_factor_for_specific_height_above_sea_floor(z_req)
+
+    ncfiles = get_files_in_dir(input_dir, 'nc')
+    for ncfile in ncfiles:
+        ncfile_new = f'{output_dir}{os.path.basename(ncfile)}'
+        log.info(f'Copied file {ncfile} to {ncfile_new}')
+        shutil.copyfile(ncfile, ncfile_new)
+
+        nc = Dataset(ncfile_new, mode='r+')
+        u = nc['u'][:].filled(fill_value=np.nan)
+        v = nc['v'][:].filled(fill_value=np.nan)
+        nc['u'][:, 0, :, :] = np.multiply(corr[:, :-1], u[:, 0, :, :])
+        nc['v'][:, 0, :, :] = np.multiply(corr[:-1, :], v[:, 0, :, :])
+        nc.close()
+        log.info(f'Applied vertical correction to file: {ncfile_new}')
+
+if __name__ == '__main__':
+    z_req = 0.5 # m above sea floor
+    input_dir = '/mnt/j/poc_transport/roms/cwa/2017/'
+    output_dir = f'/mnt/j/poc_transport/roms/cwa/2017_{z_req}m_above_seafloor/'
+    write_roms_velocities_at_specific_depth(input_dir, output_dir, z_req)
