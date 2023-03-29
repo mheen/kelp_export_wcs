@@ -35,6 +35,7 @@ class PtsConfig:
     grid_file: bool
     extra_description: str
     sub_output_dir: str
+    input_dir_description: str
 
 def get_pts_config(input_path:str) -> PtsConfig:
     config = configparser.ConfigParser()
@@ -64,11 +65,13 @@ def get_pts_config(input_path:str) -> PtsConfig:
     grid_file = bool(0 if config[pts_section_header]['grid_file'].lower == 'false' else 1)
     extra_description = config[pts_section_header]['extra_description']
     sub_output_dir = config[pts_section_header]['sub_output_dir']
+    input_dir_description = config[pts_section_header]['input_dir_description']
 
     pts_config = PtsConfig(start_date, end_date_releases, end_date_run, release_region, run_region, region_name,
                            input_dir, output_dir, n_thin_inital, dt, dt_out, export_variables, elements,
                            reader, advection_scheme, vertical_advection, vertical_mixing, horizontal_diffusivity,
-                           use_auto_landmask, coastline_action, grid_file, extra_description, sub_output_dir)
+                           use_auto_landmask, coastline_action, grid_file, extra_description, sub_output_dir,
+                           input_dir_description)
 
     return pts_config
 
