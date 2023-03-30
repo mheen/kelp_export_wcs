@@ -4,10 +4,11 @@ sys.path.insert(1, parent)
 
 from tools.files import get_dir_from_json, get_daily_files_in_time_range
 from tools.timeseries import get_closest_time_index, get_l_time_range
-from tools.coordinates import get_bearing_between_points, get_transect_lons_lats_ds_from_json
+from tools.coordinates import get_transect_lons_lats_ds_from_json
 from tools import log
 from data.roms_data import RomsGrid, RomsData, read_roms_data_from_multiple_netcdfs, read_roms_data_from_netcdf, read_roms_grid_from_netcdf
 from data.roms_data import get_distance_along_transect, get_eta_xi_along_transect, get_roms_data_for_transect, get_depth_integrated_gradient_along_transect
+from data.roms_data import get_down_transect_velocity_component
 from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
 from plot_tools.basic_maps import plot_basic_map
@@ -120,13 +121,6 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
         plt.show()
     else:
         return ax
-
-def get_down_transect_velocity_component(u:np.ndarray, v:np.ndarray,
-                                         lon1:float, lat1:float, lon2:float, lat2:float) -> np.ndarray:
-    alpha = get_bearing_between_points(lon1, lat1, lon2, lat2)
-    alpha_rad = np.deg2rad(alpha)
-    down_transect = u*np.cos(alpha_rad)+v*np.sin(alpha_rad)
-    return down_transect
 
 def plot_roms_transect(roms_data:RomsData,
                        lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
