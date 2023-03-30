@@ -144,6 +144,7 @@ class RomsData:
     temp: np.ndarray
     salt: np.ndarray
     density: np.ndarray
+    sigma_t: np.ndarray
 
 def get_roms_data_from_netcdf(full_grid:RomsGrid, input_path:str, lon_range:list, lat_range:list, time_range:list) -> tuple:
     i0 = None
@@ -293,9 +294,10 @@ def get_roms_data_from_netcdf(full_grid:RomsGrid, input_path:str, lon_range:list
     z = full_grid.z[:, j0:j1, i0:i1]
     grid = RomsGrid(lon, lat, s, angle, h, z)
 
-    density = calculate_density(salt, temp, z)
+    density = calculate_density(salt, temp, -z)
+    sigma_t = density-1000
 
-    return time, grid, u_east, v_north, temp, salt, density
+    return time, grid, u_east, v_north, temp, salt, density, sigma_t
 
 def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, time_range=None) -> RomsData:
     try:
@@ -305,12 +307,12 @@ def read_roms_data_from_netcdf(input_path:list, lon_range=None, lat_range=None, 
         warnings.warn(f'No grid information found in {input_path}. Trying separate grid file instead: {grid_file}')
         full_grid = read_roms_grid_from_netcdf(grid_file)
     
-    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(full_grid, input_path,
+    time, grid, u_east, v_north, temp, salt, density, sigma_t = get_roms_data_from_netcdf(full_grid, input_path,
                                                                                  lon_range,
                                                                                  lat_range,
                                                                                  time_range)
 
-    return RomsData(time, grid, u_east, v_north, temp, salt, density)
+    return RomsData(time, grid, u_east, v_north, temp, salt, density, sigma_t)
 
 def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end_time:datetime,
                                          lon_range=None, lat_range=None) -> RomsData:
@@ -324,18 +326,19 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
         grid_file = f'{os.path.abspath(os.path.join(os.path.dirname(nc_files[0]), os.pardir))}/grid.nc'
         warnings.warn(f'No grid information found in {nc_files[0]}. Trying separate grid file instead: {grid_file}')
         full_grid = read_roms_grid_from_netcdf(grid_file)
-    time, grid, u_east, v_north, temp, salt, density = get_roms_data_from_netcdf(full_grid, nc_files[0], lon_range, lat_range, time_range)
+    time, grid, u_east, v_north, temp, salt, density, sigma_t = get_roms_data_from_netcdf(full_grid, nc_files[0], lon_range, lat_range, time_range)
 
     for i in range(1, len(nc_files)):
-        t, _, u, v, tp, s, d = get_roms_data_from_netcdf(full_grid, nc_files[i], lon_range, lat_range, time_range)
+        t, _, u, v, tp, s, d, st = get_roms_data_from_netcdf(full_grid, nc_files[i], lon_range, lat_range, time_range)
         time = np.concatenate((time, t))
         u_east = np.concatenate((u_east, u))
         v_north = np.concatenate((v_north, v))
         temp = np.concatenate((temp, tp))
         salt = np.concatenate((salt, s))
         density = np.concatenate((density, d))
+        sigma_t = np.concatenate((sigma_t, st))
 
-    return RomsData(time, grid, u_east, v_north, temp, salt, density)
+    return RomsData(time, grid, u_east, v_north, temp, salt, density, sigma_t)
 
 def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float,
                               lon2:float, lat2:float, ds:float) -> tuple:
@@ -456,6 +459,7 @@ def write_depth_integrated_gradient_data_to_netcdf(output_path:str, time:np.ndar
 
 def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat1:float,
                                   lon2:float, lat2:float, ds:float,
+                                  output_file_description='',
                                   grid_file='input/cwa_roms_grid.nc'):
     
     grid = read_roms_grid_from_netcdf(grid_file)
@@ -469,7 +473,7 @@ def write_transect_data_to_netcdf(input_dir:str, output_dir:str, lon1:float, lat
 
     ncfiles = get_files_in_dir(input_dir, 'nc', return_full_path=False)
     for ncfile in ncfiles:
-        output_path = f'{output_dir}{ncfile}'
+        output_path = f'{output_dir}{output_file_description}{ncfile}'
         if os.path.exists(output_path):
             log.info(f'Transect file already exists, skipping: {output_path}')
         input_path = f'{input_dir}{ncfile}'
@@ -530,9 +534,3 @@ def write_roms_velocities_at_specific_depth(input_dir:str, output_dir:str, z_req
         nc['v'][:, 0, :, :] = np.multiply(corr[:-1, :], v[:, 0, :, :])
         nc.close()
         log.info(f'Applied vertical correction to file: {ncfile_new}')
-
-if __name__ == '__main__':
-    z_req = 0.5 # m above sea floor
-    input_dir = '/mnt/j/poc_transport/roms/cwa/2017/'
-    output_dir = f'/mnt/j/poc_transport/roms/cwa/2017_{z_req}m_above_seafloor/'
-    write_roms_velocities_at_specific_depth(input_dir, output_dir, z_req)
