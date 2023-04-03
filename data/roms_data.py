@@ -6,6 +6,7 @@ from tools.files import get_daily_files_in_time_range, get_files_in_dir, create_
 from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_transect_lons_lats_ds_from_json
 from tools.coordinates import get_bearing_between_points
+from tools.velocity_shore_angles import get_cross_shelf_velocity
 from tools import log
 from tools.seawater_density import calculate_density
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from datetime import datetime
 import distutils.spawn
 import subprocess
 from scipy import spatial
+from scipy.ndimage import gaussian_filter
 import warnings
 import shutil
 
@@ -201,7 +203,7 @@ def get_roms_data_from_netcdf(full_grid:RomsGrid, input_path:str, lon_range:list
     elif i0 > 0 and i1 < len_xi-1: # middle (no padding)
         u = nc['u'][t0:t1, :, j0:j1, i0-1:i1].filled(fill_value=np.nan)
     elif i0 > 0 and i1 == len_xi-1: # right (pad right)
-        u_org = nc['u'][t0:t1, :, j0:j1, i0-1:i1].filled(fill_value=np.nan)
+        u_org = nc['u'][t0:t1, :, j0:j1, i0:i1].filled(fill_value=np.nan)
         u = np.empty((u_org.shape[0], u_org.shape[1], u_org.shape[2], u_org.shape[3]+1))
         u[:, :, :, 0:-1] = u_org
         u[:, :, :, -1] = u_org[:, :, :, -1]
@@ -371,6 +373,11 @@ def get_down_transect_velocity_component(u:np.ndarray, v:np.ndarray,
     down_transect = u*np.cos(alpha_rad)+v*np.sin(alpha_rad)
     return down_transect
 
+def get_cross_shelf_velocity_component(roms_data:RomsData) -> np.ndarray:
+    h_smooth = gaussian_filter(roms_data.grid.h, 2) # smooth bathymetry before calculating cross-shelf velocity
+    u_cross = get_cross_shelf_velocity(h_smooth, roms_data.u_east, roms_data.v_north)
+    return u_cross
+
 @dataclass
 class TransectData:
     time: np.ndarray
@@ -385,8 +392,8 @@ class TransectData:
     density: np.ndarray
     sigma_t: np.ndarray
 
-def get_transect_data(roms_data:RomsData, transect_name:str):
-    lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json(transect_name)
+def get_transect_data(roms_data:RomsData, lon1:float, lat1:float,
+                      lon2:float, lat2:float, ds:float) -> TransectData:
     
     eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
     lon = roms_data.grid.lon[eta, xi]
@@ -396,9 +403,11 @@ def get_transect_data(roms_data:RomsData, transect_name:str):
     h = roms_data.grid.h[eta, xi]
     distance2d = np.repeat(distance[np.newaxis, :], z.shape[0], axis=0)
 
-    u = roms_data.u_east[:, :, eta, xi]
-    v = roms_data.v_north[:, :, eta, xi]
-    u_down = get_down_transect_velocity_component(u, v, lon1, lat1, lon2, lat2)
+    # u = roms_data.u_east[:, :, eta, xi]
+    # v = roms_data.v_north[:, :, eta, xi]
+    # u_down = get_down_transect_velocity_component(u, v, lon1, lat1, lon2, lat2)
+    u_cross = get_cross_shelf_velocity_component(roms_data)
+    u_down = u_cross[:, :, eta, xi]
 
     temp = roms_data.temp[:, :, eta, xi]
     salt = roms_data.salt[:, :, eta, xi]
