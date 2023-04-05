@@ -486,7 +486,7 @@ def get_colormap_reds_blues(n):
         colors.append(reds[i])
     return colors
 
-def plot_particle_density(grid:DensityGrid, density:np.ndarray,
+def plot_particle_density(grid:DensityGrid, density:np.ndarray, location_info:LocationInfo,
                           cmap='Reds', ranges=[10**x for x in range(0, 7)],
                           c_label_description='Particle density',
                           ax=None, show=True, output_path=None):
