@@ -70,13 +70,17 @@ class RomsGrid:
                  s:np.ndarray,
                  angle:np.ndarray,
                  h:np.ndarray,
-                 z:np.ndarray):
+                 z:np.ndarray,
+                 s_w:np.ndarray,
+                 z_w:np.ndarray):
         self.lon = lon # [eta, xi]
         self.lat = lat # [eta, xi]
         self.s = s # [s]
         self.angle = angle # [eta, xi]
         self.h = h # [eta, xi]
-        self.z = z # [eta, xi]
+        self.z = z # [s, eta, xi]
+        self.s_w = s_w # [s_w] (len(s)+1)
+        self.z_w = z_w # [s_w, eta, xi]
     
         grid_coords_1d = list(zip(np.ravel(self.lon), np.ravel(self.lat)))
         self.kdtree = spatial.KDTree(grid_coords_1d)
@@ -115,10 +119,14 @@ def read_roms_grid_from_netcdf(input_path:str) -> RomsGrid:
     cs_r = nc['Cs_r'][:].filled(fill_value=np.nan)
 
     z = get_z(s_rho, h, cs_r, hc)
+    
+    s_w = nc['s_w'][:].filled(fill_value=np.nan)
+    cs_w = nc['Cs_w'][:].filled(fill_value=np.nan)
+    z_w = get_z(s_w, h, cs_w, hc)
 
     nc.close()
 
-    return RomsGrid(lon_rho, lat_rho, s_rho, angle, h, z)
+    return RomsGrid(lon_rho, lat_rho, s_rho, angle, h, z, s_w, z_w)
 
 def get_subgrid(grid:RomsGrid, lon_range:list, lat_range:list, s_range:list) -> RomsGrid:
     i0, i1, j0, j1 = bbox2ij(grid.lon, grid.lat, [lon_range[0], lon_range[1], lat_range[0], lat_range[1]])
@@ -136,7 +144,10 @@ def get_subgrid(grid:RomsGrid, lon_range:list, lat_range:list, s_range:list) -> 
     h = grid.h[j0:j1, i0:i1]
     z = grid.z[s0:s1, j0:j1, i0:i1]
 
-    return RomsGrid(lon, lat, grid.s, angle, h, z)
+    s_w = grid.s_w[s0:s1] # not strictly correct since s_range will be different for s_rho and s_w
+    z_w = grid.z_w[s0:s1, j0:j1, i0:i1]
+
+    return RomsGrid(lon, lat, s, angle, h, z, s_w, z_w)
 
 @dataclass
 class RomsData:
@@ -155,8 +166,7 @@ def get_roms_data_from_netcdf(full_grid:RomsGrid, input_path:str, lon_range:list
     j0 = None
     j1 = None
     if lon_range is not None and lat_range is not None:
-        i0, j0 = full_grid.get_eta_xi_of_lon_lat_point(lon_range[0], lat_range[0])
-        i1, j1 = full_grid.get_eta_xi_of_lon_lat_point(lon_range[1], lat_range[1])
+        i0, i1, j0, j1 = bbox2ij(full_grid.lon, full_grid.lat, [lon_range[0], lon_range[1], lat_range[0], lat_range[1]])
         if i0 == i1:
             i1 = i0+1
         if j0 == j1:
@@ -295,7 +305,9 @@ def get_roms_data_from_netcdf(full_grid:RomsGrid, input_path:str, lon_range:list
     
     h = full_grid.h[j0:j1, i0:i1]
     z = full_grid.z[:, j0:j1, i0:i1]
-    grid = RomsGrid(lon, lat, s, angle, h, z)
+    s_w = full_grid.s[:]
+    z_w = full_grid.z_w[:, j0:j1, i0:i1]
+    grid = RomsGrid(lon, lat, s, angle, h, z, s_w, z_w)
 
     density = calculate_density(salt, temp, -z)
     sigma_t = density-1000
