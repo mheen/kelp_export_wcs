@@ -583,7 +583,7 @@ def get_vel_correction_factor_for_specific_height_above_sea_floor(z_req:float, g
     kappa = 0.41 # von Karman constant
     z0 = 1.65*10**(-5) # m bottom roughness (can potentially vary in space but is kept constant in ROMS)
     roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
-    z_sigma0 = roms_grid.z[1, :, :]-roms_grid.z[0, :, :] # height of bottom layer above sea floor
+    z_sigma0 = (roms_grid.z[1, :, :]-roms_grid.z[0, :, :])/2 # height of bottom layer above sea floor (divided by 2 because u,v-velocities are in middle of layer)
     u_sigma0 = 1 # m/s -> using this instead of actual velocity to get a correction factor
     tau_b = kappa**2*u_sigma0**2/(np.log(z_sigma0/z0))**2
     u_star = np.sqrt(tau_b)
