@@ -1,25 +1,37 @@
-from data.roms_data import RomsData, RomsGrid, read_roms_data_from_multiple_netcdfs, read_roms_grid_from_netcdf, get_subgrid
+from data.roms_data import RomsData, RomsGrid, read_roms_data_from_multiple_netcdfs, read_roms_grid_from_netcdf
 from data.roms_data import get_eta_xi_along_transect, get_distance_along_transect
 from data.roms_data import TransectData, get_transect_data
+from data.wind_data import WindData, read_era5_wind_data_from_netcdf
 from particles import Particles
 from plot_tools.plot_cycler import plot_cycler
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
 from tools import log
-from tools.timeseries import get_closest_time_index
+from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.files import get_dir_from_json
-from tools.coordinates import get_transect_lons_lats_ds_from_json
+from tools.coordinates import get_distance_between_points
 from location_info import LocationInfo, get_location_info
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 from matplotlib.colors import ListedColormap
+import matplotlib.dates as mdates
+import matplotlib.units as munits
 import cartopy.crs as ccrs
 import numpy as np
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from dataclasses import dataclass
 import json
 import warnings
+from scipy.interpolate import interp1d
+
+converter = mdates.ConciseDateConverter()
+munits.registry[np.datetime64] = converter
+munits.registry[date] = converter
+munits.registry[datetime] = converter
+
+locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
+formatter = mdates.ConciseDateFormatter(locator)
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 transect_file = 'input/transects_dswc_detection.json' # transects in this file need to be ordered correctly!
@@ -274,31 +286,185 @@ def get_grid_locations_with_dswc(roms_data:RomsData, dswc_polygons:dict[datetime
 
     return l_dswc
 
+def calculate_mean_density(roms_data:RomsData):
+    delta_z = np.diff(roms_data.grid.z_w, axis=0)
+    mean_density = np.sum(roms_data.density*delta_z, axis=1)/roms_data.grid.h
+    return mean_density
+
+def calculate_potential_energy_anomaly(roms_data:RomsData):
+    mean_density = calculate_mean_density(roms_data)
+    g = 9.81 # m/s2
+    delta_z = np.diff(roms_data.grid.z_w, axis=0)
+    phi = g/roms_data.grid.h*np.sum((np.repeat(mean_density[:, np.newaxis, :, :], roms_data.density.shape[1], axis=1)-roms_data.density)*roms_data.grid.z*delta_z, axis=1)
+    return phi
+
+def plot_potential_energy_anomaly_time_change(roms_data:RomsData, phi:np.ndarray,
+                                              ax=None, show=True, output_path=None):
+    dphidt = np.diff(np.nanmean(np.nanmean(phi, axis=1), axis=1))
+
+    if ax is None:
+        fig = plt.figure(figsize=(11, 8))
+        ax = plt.axes()
+
+    ax.plot(roms_data.time[1:], dphidt, '-k')
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.set_xlim([roms_data.time[0], roms_data.time[-1]])
+    ax.set_ylim([-3, 3])
+    ax.set_ylabel('$\frac{\partial\phi}{\partial t}$', fontsize=20)
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
+def calculate_density_gradient_per_latitude(roms_data:RomsData, include_depth=100) -> np.ndarray:
+    depth_mean_density = calculate_mean_density(roms_data)
+    l_too_deep = roms_data.grid.h > include_depth
+    depth_mean_density[:, l_too_deep] = np.nan # excluding too deep layers
+    drho = np.diff(depth_mean_density, axis=2)
+    dx = 1/roms_data.grid.pm[:, :-1] # m
+    drho_dlon = drho/dx
+    mean_density_gradient = np.nanmean(drho_dlon, axis=2)
+    return mean_density_gradient
+
+def calculate_horizontal_richardson_number(roms_data:RomsData,
+                                           wind_data:WindData,
+                                           include_depth=100) -> np.ndarray:
+    '''Calculates the horizontal Richardson number (or Simpson number) as specified by
+    Mahjabin et al. (2020, Scientific Reports).'''
+    g = 9.81 # gravitational acceleration (m/s^2)
+    rho_w = 1025 # sea water density (kg/m^3): using a standard value for this, but could also use a mean value from roms
+    rho_a = 1.2 # air density (kg/m^3)
+    density_gradient = calculate_density_gradient_per_latitude(roms_data, include_depth=include_depth)
+    mean_h = np.nanmean(roms_data.grid.h, axis=1)
+    
+    mean_wind = np.nanmean(wind_data.vel, axis=2)
+    f_interp = interp1d(wind_data.lat[:, 0], mean_wind, fill_value='extrapolate')
+    mean_wind_interp = f_interp(roms_data.grid.lat[:, 0])
+    ks = 0.03*(0.63+0.066*mean_wind_interp**(1/3))/1000 # surface drag coefficient according to Pugh (1987)
+    u = np.sqrt(ks*rho_a/rho_w)*mean_wind_interp
+    Ri = g/rho_w*mean_h**2/u**2*density_gradient # ---> seems insanely large
+    return Ri
+
+def get_time_mean_gravitational_versus_wind_equation(roms_data:RomsData,
+                                                     wind_data:WindData) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    g = 9.81
+    rho_w = 1025
+    rho_a = 1.2
+    delta = 3*10**-3
+    Kmz = 1*10**-2
+
+    density_gradient = calculate_density_gradient_per_latitude(roms_data)
+    h = np.nanmean(roms_data.grid.h)
+    
+    time = []
+    gravitational_component = []
+    wind_component = []
+
+    n_days = (roms_data.time[-1]-roms_data.time[0]).days+1
+    t0 = datetime(roms_data.time[0].year, roms_data.time[0].month, roms_data.time[0].day)
+    for n in range(n_days):
+        start_time = t0+timedelta(days=n)
+        l_time_roms = get_l_time_range(roms_data.time, start_time, start_time)
+        l_time_wind = get_l_time_range(wind_data.time, start_time, start_time)
+
+        drhodx = np.nanmean(density_gradient[l_time_roms, :])
+        w = np.nanmean(wind_data.vel[l_time_wind, :, :])
+        ks = 0.03*(0.063+0.066*w**(1/3))/1000
+
+        time.append(start_time)
+        gravitational_component.append(1/320*g**2/rho_w*h**4/Kmz*drhodx**2)
+        wind_component.append(delta*ks*rho_a*w**3/h)
+
+    return np.array(time), np.array(gravitational_component), np.array(wind_component)
+
+def plot_timeseries_dswc_conditions(roms_data:RomsData, wind_data:WindData,
+                                    ax=None, show=True, output_path=None):
+    if ax is None:
+        fig = plt.figure(figsize=(10, 8))
+        ax = plt.axes()
+
+    time, grav, wind = get_time_mean_gravitational_versus_wind_equation(roms_data, wind_data)
+
+    ax.plot(time, np.log10(grav/wind), '-k')
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.set_ylabel('Gravitational circulation forcing/\nWind mixing forcing')
+    ax.set_ylim([-6, 6])
+    ax.set_yticks([-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6])
+    ax.set_yticklabels(['$10^{-6}$', '$10^{-5}$', '$10^{-4}$', '$10^{-3}$',
+                        '0.01', '0.1', '1', '10', '100', '$10^3$',
+                        '$10^4$', '$10^5$', '$10^6$'])
+    
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if show is True:
+        plt.show()
+    else:
+        return ax
+
 if __name__ == '__main__':
-    start_date = datetime(2017, 5, 2)
-    end_date = datetime(2017, 5, 2)
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 8, 31)
     roms_dir = f'{get_dir_from_json("roms_data")}cwa/2017/'
+    era5_dir = f'{get_dir_from_json("era5_data")}'
     location_info = get_location_info('perth')
     
-    roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, start_date, end_date)
-    all_transects = get_transects_from_json(transect_file)
-
-    # plot_transects_on_map(roms_grid, location_info, transect_file)
+    # roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, start_date, end_date, lon_range=location_info.lon_range, lat_range=location_info.lat_range)
+    wind_data = read_era5_wind_data_from_netcdf(era5_dir, start_date, end_date, lon_range=location_info.lon_range, lat_range=location_info.lat_range)
     
-    # --- manual checks ---
-    transect = all_transects[2]
-    transect_data = get_transect_data(roms_data, transect['lon1'], transect['lat1'],
-                                      transect['lon2'], transect['lat2'], transect['ds'])
-    l_dswc = detect_dswc_in_transect(transect_data)
-    plot_cycling_roms_transect(transect_data, 'temp', vmin=20, vmax=22, l_dswc=l_dswc)
-    # ---
+    # plot_timeseries_dswc_conditions(roms_data, wind_data)
 
-    dswc_transects = find_dswc_in_transects(roms_data, all_transects)
-    dswc_transect_groups = group_dswc_transects(roms_data.time, dswc_transects)
-    polygon_groups = create_dswc_polygons(dswc_transect_groups)
-    l_dswc = get_grid_locations_with_dswc(roms_data, polygon_groups)
+    n_days = (end_date-start_date).days+1
+    for n in range(n_days):
+        time = start_date+timedelta(days=n)
+        roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, time, time,
+                                                         lon_range=location_info.lon_range,
+                                                         lat_range=location_info.lat_range)
+        wind_data = read_era5_wind_data_from_netcdf(era5_dir, time, time,
+                                                    lon_range=location_info.lon_range,
+                                                    lat_range=location_info.lat_range)
+        density_gradient = calculate_density_gradient_per_latitude(roms_data)
+        phi = calculate_potential_energy_anomaly(roms_data)
+        dphidt = np.diff(np.nanmean(np.nanmean(phi, axis=1), axis=1))
+        wind_vel = np.nanmean(wind_data.vel, axis=2)
+        if n == 0:
+            times = [time]
+            density_gradients = density_gradient
+            dphidts = dphidt
+            wind_vels = wind_vel
+            continue
+        times.append(time)
+        density_gradients = np.concatenate([density_gradients, density_gradient])
+        dphidts = np.concatenate([dphidts, dphidt])
+        wind_vels = np.concatenate([wind_vels, wind_vel])
 
-    plot_cycling_roms_map(roms_data, 'temp', 0, location_info, vmin=20., vmax=22.,
-                          l_dswc=l_dswc)
+    times = np.array(times)   
+
+    # phi = calculate_potential_energy_anomaly(roms_data, roms_data.grid)
+    # plot_potential_energy_anomaly_time_change(roms_data, phi, output_path=f'{get_dir_from_json("plots")}dphidt_perth_MarAug2017.jpg')
+
+    # all_transects = get_transects_from_json(transect_file)
+
+    # # plot_transects_on_map(roms_grid, location_info, transect_file)
     
+    # # --- manual checks ---
+    # transect = all_transects[2]
+    # transect_data = get_transect_data(roms_data, transect['lon1'], transect['lat1'],
+    #                                   transect['lon2'], transect['lat2'], transect['ds'])
+    # l_dswc = detect_dswc_in_transect(transect_data)
+    # plot_cycling_roms_transect(transect_data, 'temp', vmin=20, vmax=22, l_dswc=l_dswc)
+    # # ---
 
+    # dswc_transects = find_dswc_in_transects(roms_data, all_transects)
+    # dswc_transect_groups = group_dswc_transects(roms_data.time, dswc_transects)
+    # polygon_groups = create_dswc_polygons(dswc_transect_groups)
+    # l_dswc = get_grid_locations_with_dswc(roms_data, polygon_groups)
+
+    # plot_cycling_roms_map(roms_data, 'temp', 0, location_info, vmin=20., vmax=22.,
+    #                       l_dswc=l_dswc)
