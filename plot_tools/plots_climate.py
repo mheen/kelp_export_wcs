@@ -107,28 +107,3 @@ def plot_dmi_index(time:np.ndarray, dmi:np.ndarray, ax=None,
     else:
         return ax
 
-if __name__ == '__main__':
-    
-    time_mei, mei = read_mei_data()
-    time_dmi, dmi = read_dmi_data()
-    
-    output_path = f'{get_dir_from_json("plots")}mei_dmi.jpg'
-    xlim = [datetime(2000, 1, 1), datetime(2023, 1, 1)]
-
-    fig = plt.figure(figsize=(10, 10))
-    ax1 = plt.subplot(2, 1, 1)
-    ax1 = plot_mei_index(time_mei, mei, ax=ax1, xlim=xlim, show=False)
-    ax1.xaxis.set_major_locator(mdates.YearLocator())
-    ax1.set_xticklabels([])
-    ax1.set_title('El Nino Southern Oscillation indicator')
-
-    ax2 = plt.subplot(2, 1, 2)
-    ax2 = plot_dmi_index(time_dmi, dmi, ax=ax2, xlim=xlim, show=False)
-    ax2.xaxis.set_major_locator(mdates.YearLocator())
-    for label in ax2.get_xticklabels(which='major'):
-        label.set(rotation=90, horizontalalignment='center')
-    ax2.set_title('Indian Ocean Dipole indicator')
-
-    log.info(f'Saving figure to: {output_path}')
-    plt.savefig(output_path, bbox_inches='tight', dpi=300)
-    

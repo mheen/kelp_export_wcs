@@ -3,16 +3,28 @@ from tools.files import get_dir_from_json
 from tools import log
 from data.bathymetry_data import BathymetryData
 from data.roms_data import read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
+from data.climate_data import read_dmi_data, read_mei_data
 from plot_tools.general import add_subtitle
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
 from plot_tools.plots_roms import plot_exceedance_threshold_velocity, plot_roms_map
 from plot_tools.plots_particles import plot_particle_density, _plot_age_in_deep_sea_cumulative_only
+from plot_tools.plots_climate import plot_dmi_index, plot_mei_index
 from particles import Particles, DensityGrid, get_particle_density
-from datetime import datetime
+from datetime import datetime, date
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.units as munits
 import cartopy.crs as ccrs
 import numpy as np
+
+converter = mdates.ConciseDateConverter()
+munits.registry[np.datetime64] = converter
+munits.registry[date] = converter
+munits.registry[datetime] = converter
+
+locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
+formatter = mdates.ConciseDateFormatter(locator)
 
 start_date = datetime(2017, 3, 1)
 end_date = datetime(2017, 8, 31)
@@ -25,6 +37,34 @@ location_info = get_location_info('cwa_perth')
 time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+
+# ---------------------------------------------------------------------------------
+# Climate indices
+# ---------------------------------------------------------------------------------
+time_mei, mei = read_mei_data()
+time_dmi, dmi = read_dmi_data()
+
+output_path = f'{get_dir_from_json("plots")}si/figure_s1.jpg'
+xlim = [datetime(2000, 1, 1), datetime(2023, 1, 1)]
+
+fig = plt.figure(figsize=(10, 10))
+ax1 = plt.subplot(2, 1, 1)
+ax1 = plot_mei_index(time_mei, mei, ax=ax1, xlim=xlim, show=False)
+ax1.axvspan(datetime(2017, 3, 1), datetime(2017, 8, 31), alpha=0.5, color='#808080')
+ax1.xaxis.set_major_locator(mdates.YearLocator())
+ax1.set_xticklabels([])
+ax1.set_title('(a) El Nino Southern Oscillation indicator')
+
+ax2 = plt.subplot(2, 1, 2)
+ax2 = plot_dmi_index(time_dmi, dmi, ax=ax2, xlim=xlim, show=False)
+ax2.axvspan(datetime(2017, 3, 1), datetime(2017, 8, 31), alpha=0.5, color='#808080')
+ax2.xaxis.set_major_locator(mdates.YearLocator())
+for label in ax2.get_xticklabels(which='major'):
+    label.set(rotation=90, horizontalalignment='center')
+ax2.set_title('(b) Indian Ocean Dipole indicator')
+
+log.info(f'Saving figure to: {output_path}')
+plt.savefig(output_path, bbox_inches='tight', dpi=300)
 
 # ---------------------------------------------------------------------------------
 # ROMS
@@ -66,7 +106,7 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # kappa = 0.41 # von Karman constant
 # z0 = 1.65*10**(-5) # m bottom roughness
 # u_sigma0 = 1 # m/s (using 1 so that it becomes a multiplication factor as a function of depth)
-# z_sigma0 = np.array([1.0, 5.0, 10.0, 25.0, 50.0, 100.0]) # different layer depths
+# z_sigma0 = np.array([1.0, 5.0, 10.0, 25.0, 50.0, 100.0]) # different layer depths -> NEED TO DIVIDE BY 2 BECAUSE ROMS U,V ARE IN CENTER OF SIGMA LAYERS
 
 # ax = plt.axes()
 # ax.grid(True, linestyle='--', alpha=0.5)
