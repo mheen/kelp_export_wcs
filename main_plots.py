@@ -1,6 +1,6 @@
 from tools import log
 from tools.files import get_dir_from_json, get_daily_files_in_time_range
-from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_daily_means, get_closest_time_index
+from tools.timeseries import convert_time_to_datetime, get_l_time_range, get_daily_means, get_closest_time_index, add_month_to_time
 from tools.coordinates import get_transect_lons_lats_ds_from_json
 
 from data.kelp_data import KelpProbability
@@ -10,13 +10,14 @@ from data.roms_data import RomsData, RomsGrid, read_roms_data_from_multiple_netc
 from data.roms_data import get_roms_data_for_transect, get_depth_integrated_gradient_along_transect, read_depth_integrated_gradient_data_from_netcdf
 
 from plot_tools.basic_maps import plot_basic_map
-from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea
+from plot_tools.plots_particles import plot_timeseries_in_deep_sea, plot_age_in_deep_sea, plot_particle_density
 from plot_tools.plots_particles import plot_histogram_arriving_in_deep_sea, plot_histogram_moving_deeper
 from plot_tools.plots_bathymetry import plot_contours
 from plot_tools.plots_roms import plot_depth_integrated_gradient_along_transect
 
 from location_info import LocationInfo, get_location_info
-from particles import Particles
+from particles import Particles, get_particle_density, DensityGrid
+from dswc_detector import calculate_potential_energy_anomaly
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -325,33 +326,58 @@ def animate_particles_with_roms_field(particles:Particles, roms_input_dir:str,
 
 if __name__ == '__main__':
 
-    location_info = get_location_info('cwa_perth')
+    location_info = get_location_info('cwa')
 
-    # --- Particle tracking data ---
-    h_deeper = 50 # m
+    h_deep_sea = 200
+
     input_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     particles = Particles.read_from_netcdf(input_path)
+    grid = DensityGrid(location_info.lon_range, location_info.lat_range, 0.02)
+    p_arriving, t_arriving = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+    for n in range(6):
+        start_time = add_month_to_time(datetime(2017, 3, 1), n)
+        end_time = add_month_to_time(start_time, 1)-timedelta(days=1)
+        l_time = np.logical_and(particles.time[t_arriving]>=start_time, particles.time[t_arriving]<=end_time)
+        lon_p = particles.lon[p_arriving[l_time], t_arriving[l_time]]
+        lat_p = particles.lat[p_arriving[l_time], t_arriving[l_time]]
+        density = get_particle_density(grid, lon_p, lat_p)
+        output_path = f'{get_dir_from_json("plots")}pd_200m_crossing_{start_time.strftime("%b")}{end_time.strftime("%b%Y")}.jpg'
+        plot_particle_density(grid, density, get_location_info('cwa_perth_zoom'), output_path=output_path, show=False)
+
+    for n in range(6):
+        start_time = add_month_to_time(datetime(2017, 3, 1), n)
+        end_time = add_month_to_time(start_time, 1)-timedelta(days=1)
+        l_time = np.logical_and(particles.time>=start_time, particles.time<=end_time)
+        density = get_particle_density(grid, particles.lon[:, l_time], particles.lat[:, l_time])
+        output_path = f'{get_dir_from_json("plots")}pd_{start_time.strftime("%b%Y")}.jpg'
+        plot_particle_density(grid, density, get_location_info('cwa_perth_zoom'), output_path=output_path, show=False)
     
-    # --- ROMS transect and density gradient data ---
-    lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
 
-    transect_input_path = f'{get_dir_from_json("processed_data")}roms_transects/TR_density_Mar-Aug2017.nc'
-    density_gradient, density, distance, z, time = read_depth_integrated_gradient_data_from_netcdf(transect_input_path)
+    # # --- Particle tracking data ---
+    # h_deeper = 50 # m
+    # input_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
+    # particles = Particles.read_from_netcdf(input_path)
     
-    # --- Wind data ---
-    wind_data_hourly = read_era5_wind_data(f'{get_dir_from_json("era5_data")}era5_roms_forcing_20170101.nc')
-    wind_data = get_daily_mean_wind_data(wind_data_hourly)
-    wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon2, lat2)
-    wind_data_p = get_wind_data_in_point(wind_data, lon2, lat2)
+    # # --- ROMS transect and density gradient data ---
+    # lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
 
-    # -- Plots ---
-    output_dir = f'{get_dir_from_json("plots")}'
+    # transect_input_path = f'{get_dir_from_json("processed_data")}roms_transects/TR_density_Mar-Aug2017.nc'
+    # density_gradient, density, distance, z, time = read_depth_integrated_gradient_data_from_netcdf(transect_input_path)
+    
+    # # --- Wind data ---
+    # wind_data_hourly = read_era5_wind_data(f'{get_dir_from_json("era5_data")}era5_roms_forcing_20170101.nc')
+    # wind_data = get_daily_mean_wind_data(wind_data_hourly)
+    # wind_vel, wind_dir = get_wind_vel_and_dir_in_point(wind_data, lon2, lat2)
+    # wind_data_p = get_wind_data_in_point(wind_data, lon2, lat2)
 
-    time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
-    output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{h_deeper}m_deeper_{time_str}.jpg'
-    plot_particles_arriving_with_dswc_conditions(particles, h_deeper, time, density_gradient, 'density',
-                                                 wind_data.time, wind_vel, wind_dir, wind_data_p.u,
-                                                 output_path=output_path, show=False)
+    # # -- Plots ---
+    # output_dir = f'{get_dir_from_json("plots")}'
+
+    # time_str = f'{particles.time[0].year}-{particles.time[0].strftime("%b")}-{particles.time[-1].strftime("%b")}'
+    # output_path = f'{output_dir}cwa-perth_histogram_dswc_conditions_{h_deeper}m_deeper_{time_str}.jpg'
+    # plot_particles_arriving_with_dswc_conditions(particles, h_deeper, time, density_gradient, 'density',
+    #                                              wind_data.time, wind_vel, wind_dir, wind_data_p.u,
+    #                                              output_path=output_path, show=False)
 
     # output_path = f'{output_dir}cwa-perth_animation_with_bottom_temp_2017-Mar-Aug.gif'
     # animate_particles_with_roms_field(particles, roms_input_dir, location_info, h_deep_sea, output_path=output_path)
