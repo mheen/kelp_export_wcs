@@ -17,6 +17,7 @@ import matplotlib.animation as animation
 import matplotlib.dates as mdates
 import matplotlib.units as munits
 from matplotlib.colors import LinearSegmentedColormap, BoundaryNorm
+from matplotlib import colormaps
 import cartopy.crs as ccrs
 from warnings import warn
 import numpy as np
@@ -473,21 +474,8 @@ def plot_initial_particle_density_entering_deep_sea(particles:Particles, locatio
     else:
         return ax
 
-def get_colormap_reds(n):
-    colors = ['#fece6b', '#fd8e3c', '#f84627', '#d00d20', '#b50026', '#950026', '#830026']
-    return colors[:n]
-
-def get_colormap_reds_blues(n):
-    n = n // 2
-    reds = ['#ffae82', '#eb7352', '#c73b33', '#950026']
-    blues = ['#0a2a6a', '#3050a1', '#5f7acd', '#93a8ed']
-    colors = blues[:n]
-    for i in range(n):
-        colors.append(reds[i])
-    return colors
-
 def plot_particle_density(grid:DensityGrid, density:np.ndarray, location_info:LocationInfo,
-                          cmap='Reds', ranges=[10**x for x in range(0, 7)],
+                          cmap='summer', ranges=[10**x for x in range(0, 7)],
                           c_label_description='Particle density',
                           ax=None, show=True, output_path=None):
     
@@ -501,11 +489,9 @@ def plot_particle_density(grid:DensityGrid, density:np.ndarray, location_info:Lo
     x, y = np.meshgrid(grid.lon, grid.lat)
     density[density==0] = np.nan
 
-    if cmap == 'RedBlue':
-        colors = get_colormap_reds_blues(len(ranges))
-    else:
-        colors = get_colormap_reds(len(ranges))
-    cm = LinearSegmentedColormap.from_list('cm_log_density', colors, N=len(ranges))
+    cm_mpl = colormaps[cmap]
+    colors = cm_mpl(np.arange(0, 1, 1/len(ranges)))
+    cm = LinearSegmentedColormap.from_list('cm', colors, N=len(ranges))
     norm = BoundaryNorm(ranges, ncolors=len(ranges))
     c = ax.pcolormesh(x, y, density, cmap=cm, norm=norm, transform=ccrs.PlateCarree())
     cbar = plt.colorbar(c)
