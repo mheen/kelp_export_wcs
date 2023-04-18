@@ -1,6 +1,7 @@
 log*
 input/dirs.json
 *.nc
+*.pickle
 test*
 temp_*
 
