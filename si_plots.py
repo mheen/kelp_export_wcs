@@ -70,6 +70,21 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # ---------------------------------------------------------------------------------
 # ROMS
 # ---------------------------------------------------------------------------------
+# --- Horizontal resolution ---
+dx = np.sqrt(1/roms_grid.pm*1/roms_grid.pn) # square root of grid cell areas for approximate resolution (m)
+
+output_resolution = f'{plots_dir}figure_s3.jpg'
+
+ax = plt.axes(projection=ccrs.PlateCarree())
+ax = plot_basic_map(ax, location_info)
+ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
+c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, dx, vmin=1700, vmax=2100, cmap='viridis')
+cbar = plt.colorbar(c)
+cbar.set_label('Square root of grid cell area (m)')
+ax.set_title('Approximate horizontal resolution of CWA-ROMS grid')
+log.info(f'Saving figure to: {output_resolution}')
+plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
+
 # # --- Exceedance threshold velocity plots ---
 # thres_vel = 0.045#, 0.031]
 # thres_sd = 0.016#, 0.015]
