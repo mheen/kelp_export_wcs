@@ -14,7 +14,7 @@ import numpy as np
 
 def plot_contours(lon:np.ndarray, lat:np.ndarray, h:np.ndarray,
                   location_info:LocationInfo, ax=None, show=True, fontsize=10,
-                  color='k', highlight_contour=[600], show_perth_canyon=True) -> plt.axes:
+                  color='k', highlight_contour=[200], show_perth_canyon=True, linewidths=1) -> plt.axes:
 
     if ax is None:
         ax = plt.axes(projection=ccrs.PlateCarree())
@@ -45,7 +45,7 @@ def plot_contours(lon:np.ndarray, lat:np.ndarray, h:np.ndarray,
     contour_levels = [cl for cl in location_info.contour_levels if cl not in cs_remove]
 
     cs = ax.contour(xm, ym, zm, levels=contour_levels,
-                    colors=color, linewidths=1, transform=ccrs.PlateCarree())
+                    colors=color, linewidths=linewidths, transform=ccrs.PlateCarree())
     ax.clabel(cs, cs.levels, fontsize=fontsize, inline=True, fmt=_fmt)
 
     if highlight_contour is not None:

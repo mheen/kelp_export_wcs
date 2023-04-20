@@ -17,6 +17,7 @@ import matplotlib.dates as mdates
 import matplotlib.units as munits
 import cartopy.crs as ccrs
 import numpy as np
+import cmocean
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
@@ -70,31 +71,31 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # ---------------------------------------------------------------------------------
 # ROMS
 # ---------------------------------------------------------------------------------
-# --- Horizontal resolution ---
-dx = np.sqrt(1/roms_grid.pm*1/roms_grid.pn) # square root of grid cell areas for approximate resolution (m)
+# # --- Horizontal resolution ---
+# dx = np.sqrt(1/roms_grid.pm*1/roms_grid.pn) # square root of grid cell areas for approximate resolution (m)
 
-output_resolution = f'{plots_dir}figure_s3.jpg'
+# output_resolution = f'{plots_dir}figure_s3.jpg'
 
-ax = plt.axes(projection=ccrs.PlateCarree())
-ax = plot_basic_map(ax, location_info)
-ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
-c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, dx, vmin=1700, vmax=2100, cmap='viridis')
-cbar = plt.colorbar(c)
-cbar.set_label('Square root of grid cell area (m)')
-ax.set_title('Approximate horizontal resolution of CWA-ROMS grid')
-log.info(f'Saving figure to: {output_resolution}')
-plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
+# ax = plt.axes(projection=ccrs.PlateCarree())
+# ax = plot_basic_map(ax, location_info)
+# ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+# c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, dx, vmin=1700, vmax=2100, cmap='viridis')
+# cbar = plt.colorbar(c)
+# cbar.set_label('Square root of grid cell area (m)')
+# ax.set_title('Approximate horizontal resolution of CWA-ROMS grid')
+# log.info(f'Saving figure to: {output_resolution}')
+# plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
+# plt.close()
 
 # # --- Exceedance threshold velocity plots ---
 # thres_vel = 0.045#, 0.031]
 # thres_sd = 0.016#, 0.015]
 # thres_name = 'Ecklonia'#, 'Ecklonia (medium)']
 
-# output_exceedance_his = f'{plots_dir}figure_s7a.jpg'
-# output_exceedance_map = f'{plots_dir}figure_s7b.jpg'
+# output_exceedance = f'{plots_dir}figure_s7.jpg'
 
 # plot_exceedance_threshold_velocity(roms_dir, start_date, end_date, thres_vel, thres_sd, thres_name,
-#                                    location_info, output_exceedance_his, output_exceedance_map)
+#                                    location_info, output_exceedance)
 
 # # --- Bottom layer depth ---
 # output_bottom_layer_depth = f'{plots_dir}/figure_s4.jpg'
@@ -102,8 +103,8 @@ plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
 
 # ax = plt.axes(projection=ccrs.PlateCarree())
 # ax = plot_basic_map(ax, location_info)
-# ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
-# c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, np.log10(layer_depth), cmap='viridis_r', vmin=0, vmax=3)
+# ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+# c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, np.log10(layer_depth), cmap=cmocean.cm.deep, vmin=0, vmax=3)
 # cbar = plt.colorbar(c)
 # ticks = [1, 2, 4, 6, 8, 10, 25, 50, 100, 250, 500, 1000]
 # cbar.set_ticks(np.log10(ticks))
@@ -112,22 +113,25 @@ plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
 # ax.set_title('Thickness of CWA-ROMS bottom layer')
 # log.info(f'Saving figure to: {output_bottom_layer_depth}')
 # plt.savefig(output_bottom_layer_depth, bbox_inches='tight', dpi=300)
+# plt.close()
 
 # # --- Logarithmic bottom layer ---
 # # u(z) = u*/kappa*log(z/z0)
 # # u* = sqrt(tau_b)
 # # tau_b = kappa**2*u_sigma0**2/log**2(z_sigma0/z0)
-# output_logarithmic_bottom_profiles = f'{plots_dir}figure_s5a.jpg'
+# output_logprofiles = f'{plots_dir}figure_s5.jpg'
 
 # kappa = 0.41 # von Karman constant
 # z0 = 1.65*10**(-5) # m bottom roughness
 # u_sigma0 = 1 # m/s (using 1 so that it becomes a multiplication factor as a function of depth)
 # z_sigma0 = np.array([1.0, 5.0, 10.0, 25.0, 50.0, 100.0]) # different layer depths
 
-# ax = plt.axes()
-# ax.grid(True, linestyle='--', alpha=0.5)
-# ax.set_xlabel('Velocity in logarithmic bottom layer (m/s)')
-# ax.set_ylabel('Height above sea floor (m)')
+# fig = plt.figure(figsize=(8, 10))
+# # Logarithmic profiles
+# ax1 = plt.subplot(2, 1, 1)
+# ax1.grid(True, linestyle='--', alpha=0.5)
+# ax1.set_xlabel('Velocity in logarithmic bottom layer (m/s)')
+# ax1.set_ylabel('Height above sea floor (m)')
 
 # linestyles = ['-', '--', ':', '-', '--', ':']
 # colors = ['k', 'k', 'k', '#808080', '#808080', '#808080']
@@ -137,29 +141,30 @@ plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
 #     tau_b = kappa**2*u_sigma0**2/(np.log(z_sigma0[i]/z0))**2
 #     u = np.sqrt(tau_b)/kappa*np.log(z/z0)
 #     u[u>1.0] = 1.0
-#     ax.plot(u, z, label=z_sigma0[i]*2, color=colors[i], linestyle=linestyles[i]) # label=z_sigma0*2 because velocities are in center of sigma layers
+#     ax1.plot(u, z, label=z_sigma0[i]*2, color=colors[i], linestyle=linestyles[i]) # label=z_sigma0*2 because velocities are in center of sigma layers
 
-# ax.set_xlim([0.60, 1.0])
-# ax.set_ylim([0.0, 20.0])
-# ax.legend(loc='upper left', title='Bottom layer thickness (m):')
-# log.info(f'Saving figure to: {output_logarithmic_bottom_profiles}')
-# plt.savefig(output_logarithmic_bottom_profiles, bbox_inches='tight', dpi=300)
-# plt.close()
+# ax1.set_xlim([0.60, 1.0])
+# ax1.set_ylim([0.0, 20.0])
+# ax1.legend(loc='lower left', title='Bottom layer\nthickness (m):')
+# add_subtitle(ax1, '(a) Logarithmic velocity profiles for different layer depths')
 
-# # --- Logarithmic bottom layer correction spatial variation ---
+# # Spatial variation
 # z_drift = 0.5 # m -> assuming that seaweed would drift at 50 cm above seafloor
-# output_logarithmic_correction = f'{plots_dir}figure_s5b.jpg'
 # u_corr = get_vel_correction_factor_for_specific_height_above_sea_floor(z_drift)
 
-# ax = plt.axes(projection=ccrs.PlateCarree())
-# ax = plot_basic_map(ax, location_info)
-# ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
-# c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, u_corr)
+# ax2 = plt.subplot(2, 1, 2, projection=ccrs.PlateCarree())
+# ax2 = plot_basic_map(ax2, location_info)
+# ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+# c = ax2.pcolormesh(roms_grid.lon, roms_grid.lat, u_corr, cmap=cmocean.cm.ice)
 # cbar = plt.colorbar(c)
 # cbar.set_label('Correction factor to current velocities')
-# ax.set_title(f'Drift at {z_drift} m above sea floor')
-# log.info(f'Saving figure to: {output_logarithmic_correction}')
-# plt.savefig(output_logarithmic_correction, bbox_inches='tight', dpi=300)
+# add_subtitle(ax2, f'(b) Correction factor for drift at\n     {z_drift} m above sea floor')
+# l1, b1, w1, h1 = ax1.get_position().bounds
+# l2, b2, w2, h2 = ax2.get_position().bounds
+# ax2.set_position([l1+w2/2, b2, w2, h2])
+
+# log.info(f'Saving figure to: {output_logprofiles}')
+# plt.savefig(output_logprofiles, bbox_inches='tight', dpi=300)
 # plt.close()
 
 # ---------------------------------------------------------------------------------
@@ -172,26 +177,28 @@ plt.savefig(output_resolution, bbox_inches='tight', dpi=300)
 
 # --- Particle density comparison ---
 def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:DensityGrid,
+                                     p1:Particles, p2:Particles, h_deep_sea:float,
                                      location_info:LocationInfo, title1:str, title2:str, 
-                                     output_path:str, cmap='summer'):
+                                     output_path:str):
     bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
 
-    fig = plt.figure(figsize=(11, 8))
-    ax1 = plt.subplot(1, 3, 1, projection=ccrs.PlateCarree())
+    fig = plt.figure(figsize=(8, 11))
+    plt.subplots_adjust(hspace=0.35)
+    ax1 = plt.subplot(2, 2, 1, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
-    ax1 = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax1, show=False, show_perth_canyon=False, color='#757575')
+    ax1 = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.5)
     ranges = [10**x for x in range(0, 7)]
     ticklabels = ['1', '10', '10$^2$', '10$^3$', '10$^4$', '10$^5$', '10$^6$']
-    ax1, cbar1, c1 = plot_particle_density(pd_grid, pd1, location_info, ax=ax1, show=False, cmap=cmap)
+    ax1, cbar1, c1 = plot_particle_density(pd_grid, pd1, location_info, ax=ax1, show=False)
     cbar1.remove()
-    ax1 = add_subtitle(ax1, title1)
+    ax1 = add_subtitle(ax1, f'(a) {title1}')
 
-    ax2 = plt.subplot(1, 3, 2, projection=ccrs.PlateCarree())
+    ax2 = plt.subplot(2, 2, 2, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info, xmarkers='off')
-    ax2 = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='#757575')
-    ax2, cbar2, c2 = plot_particle_density(pd_grid, pd2, location_info, ax=ax2, show=False, cmap=cmap)
+    ax2 = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.5)
+    ax2, cbar2, c2 = plot_particle_density(pd_grid, pd2, location_info, ax=ax2, show=False)
     cbar2.remove()
-    ax2 = add_subtitle(ax2, title2)
+    ax2 = add_subtitle(ax2, f'(b) {title2}')
     # colorbar
     l, b, w, h = ax1.get_position().bounds
     cbax = fig.add_axes([l, b-0.06, 2.2*w, 0.02])
@@ -199,33 +206,31 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
     cbar.ax.set_xticklabels(ticklabels)
     cbar.set_label(f'Particle density (#/{pd_grid.dx}$^o$ grid cell)')
 
+    # timeseries age in deep sea
+    ax3 = plt.subplot(2, 2, (3, 4))
+    ax3 = _plot_age_in_deep_sea_cumulative_only(ax3, p1, h_deep_sea, label=title1)
+    ax3 = _plot_age_in_deep_sea_cumulative_only(ax3, p2, h_deep_sea, linestyle='--', label=title2)
+    ax3.set_xlim([0, 100])
+    ax3.set_ylim([0, 80])
+    ax3.grid(True, linestyle='--', alpha=0.5)
+    ax3.set_xlabel('Particle age (days)')
+    ax3.set_ylabel(f'Cumulative particles passing shelf break at {h_deep_sea} m (%)')
+    ax3.legend(loc='lower right')
+    add_subtitle(ax3, '(c) Particle age comparison passing shelf break')
+
     log.info(f'Saving figure to: {output_path}')
     plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close()
 
 # dx = 0.05
+# h_deep_sea = 200 # m
 
 # pd_grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
 # density_baseline = get_particle_density(pd_grid, p_baseline.lon, p_baseline.lat)
 # density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
 
-# output_pd_thres_comparison = f'{plots_dir}figure_s8a.jpg'
-# plot_particle_density_comparison(density_baseline, density_threshold, pd_grid, location_info,
-#                                  '(a) Baseline Mar-Aug 2017', '(b) Threshold vel. Mar-Aug 2017',
-#                                  output_pd_thres_comparison, cmap='summer')
-
-# # -- Particle timeseries deep sea comparison ---
-# h_deep_sea = 200 # m
-# output_ptime_thres_comparison = f'{plots_dir}figure_s8b.jpg'
-
-# fig = plt.figure(figsize=(11, 6))
-# ax = plt.axes()
-# ax = _plot_age_in_deep_sea_cumulative_only(ax, p_baseline, h_deep_sea, label='Baseline Mar-Aug 2017')
-# ax = _plot_age_in_deep_sea_cumulative_only(ax, p_threshold, h_deep_sea, linestyle='--', label='Threshold vel. Mar-Aug 2017')
-# ax.set_xlim([0, 100])
-# ax.set_ylim([0, 80])
-# ax.grid(True, linestyle='--', alpha=0.5)
-# ax.set_xlabel('Particle age (days)')
-# ax.set_ylabel(f'Cumulative particles passing shelf break at {h_deep_sea} m (%)')
-# ax.legend(loc='lower right')
-# log.info(f'Saving figure to {output_ptime_thres_comparison}')
-# plt.savefig(output_ptime_thres_comparison, bbox_inches='tight', dpi=300)
+# output_pd_thres_comparison = f'{plots_dir}figure_s8.jpg'
+# plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
+#                                  p_baseline, p_threshold, h_deep_sea,
+#                                  location_info, 'Baseline Mar-Aug 2017', 'Threshold vel. Mar-Aug 2017',
+#                                  output_pd_thres_comparison)

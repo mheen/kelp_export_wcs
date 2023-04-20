@@ -12,6 +12,7 @@ from data.roms_data import get_down_transect_velocity_component
 from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
 from plot_tools.basic_maps import plot_basic_map
+from plot_tools.general import add_subtitle
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -20,6 +21,8 @@ import matplotlib.units as munits
 import numpy as np
 from datetime import datetime, date, timedelta
 import pandas as pd
+import cmocean
+import pickle
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
@@ -338,44 +341,70 @@ def plot_depth_gradient(roms_data:RomsData, location_info:LocationInfo,
 def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_date:datetime,
                                        thres_vel:float, thres_sd:float, thres_name:str,
                                        location_info:LocationInfo,
-                                       output_path_his:str, output_path_map:str,
+                                       output_path:str,
                                        s=0,
-                                       cmap='viridis', color='#346ca7', edgecolor='none'):
+                                       cmap=cmocean.cm.ice, color='#25419e', edgecolor='none',
+                                       pickle_file='exceedance_threshold.pickle'):
     
     roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 
-    ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
+    if os.path.exists(pickle_file):
+        with open(pickle_file, 'rb') as f:
+            vel_bins, n_vel, p_exceed = pickle.load(f)
 
-    vel_bins = np.arange(0, 1.5, 0.01)
-    n_vel = np.zeros(len(vel_bins)-1)
-    n_total_times = 0
-    n_exceed = np.zeros(roms_grid.lon.shape)
+    else:
+        ncfiles = get_daily_files_in_time_range(input_dir, start_date, end_date, 'nc')
 
-    for ncfile in ncfiles:
-        roms_data = read_roms_data_from_netcdf(ncfile)
+        vel_bins = np.arange(0, 1.5, 0.01)
+        n_vel = np.zeros(len(vel_bins)-1)
+        n_total_times = 0
+        n_exceed = np.zeros(roms_grid.lon.shape)
 
-        u = roms_data.u_east[:, s, :, :]
-        v = roms_data.v_north[:, s, :, :]
-        vel = np.sqrt(u**2+v**2)
+        for ncfile in ncfiles:
+            roms_data = read_roms_data_from_netcdf(ncfile)
 
-        n_vel_single, _ = np.histogram(vel[~np.isnan(vel)], bins=vel_bins)
-        n_vel += n_vel_single
+            u = roms_data.u_east[:, s, :, :]
+            v = roms_data.v_north[:, s, :, :]
+            vel = np.sqrt(u**2+v**2)
 
-        n_total_times += len(roms_data.time)
-        n_exceed += np.sum(vel>thres_vel, axis=0)
+            n_vel_single, _ = np.histogram(vel[~np.isnan(vel)], bins=vel_bins)
+            n_vel += n_vel_single
 
-        roms_data = None
+            n_total_times += len(roms_data.time)
+            n_exceed += np.sum(vel>thres_vel, axis=0)
 
-    p_exceed = n_exceed/n_total_times*100
+            roms_data = None
 
-    plot_exceedance_threshold_velocity_histogram(input_dir, start_date, end_date, thres_vel, thres_sd, thres_name,
-                                                 vel_bins=vel_bins, n_vel=n_vel,
-                                                 color=color, edgecolor=edgecolor,
-                                                 show=False, output_path=output_path_his)
+        p_exceed = n_exceed/n_total_times*100
 
-    plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info,
-                                           roms_grid=roms_grid, p_exceed=p_exceed,
-                                           cmap=cmap, show=False, output_path=output_path_map)
+        with open(pickle_file, 'wb') as f:
+            pickle.dump((vel_bins, n_vel, p_exceed), f)
+
+    fig = plt.figure(figsize=(8, 11))
+    ax1 = plt.subplot(2, 1, 1)
+    ax1 = plot_exceedance_threshold_velocity_histogram(input_dir, start_date, end_date, thres_vel, thres_sd, thres_name,
+                                                       vel_bins=vel_bins, n_vel=n_vel,
+                                                       color=color, edgecolor=edgecolor,
+                                                       show=False,
+                                                       ax=ax1)
+    ax1.set_title('')
+    add_subtitle(ax1, f'(a) Exceedance of threshold velocity histogram ({start_date.strftime("%b")}-{end_date.strftime("%b %Y")})')
+
+    ax2 = plt.subplot(2, 1, 2, projection=ccrs.PlateCarree())
+    ax2 = plot_basic_map(ax2, location_info)
+    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+    ax2 = plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info,
+                                                 roms_grid=roms_grid, p_exceed=p_exceed,
+                                                 cmap=cmap, show=False,
+                                                 ax=ax2)
+    add_subtitle(ax2, '(b) Exceedance of threshold\nvelocity spatial variation')
+    l1, b1, w1, h1 = ax1.get_position().bounds
+    l2, b2, w2, h2 = ax2.get_position().bounds
+    ax2.set_position([l1+w2/2, b2, w2, h2])
+    
+    log.info(f'Saving figure to: {output_path}')
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close()
 
 def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, end_date:datetime,
                                            thres_vel:float, location_info:LocationInfo, s=0, cmap='viridis',
@@ -404,11 +433,11 @@ def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, e
     if ax is None:
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax = plot_basic_map(ax, location_info)
-        ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
+        ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
 
     c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, p_exceed, cmap=cmap, vmin=0, vmax=100)
     cbar = plt.colorbar(c)
-    cbar.set_label('Exceedance threshold velocity (%)')
+    cbar.set_label('Exceedance of threshold velocity (%)')
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -450,11 +479,13 @@ def plot_exceedance_threshold_velocity_histogram(input_dir:str, start_date:datet
     ax.set_xlabel('Velocity (m/s)')
     ax.set_ylabel('Occurrence')
 
-    ylim = ax.get_ylim()
+    ylim = ax.set_ylim([0, 6*10**7])
     ax.plot([thres_vel, thres_vel], ylim, '--k')
     ax.fill_betweenx(ylim, thres_vel-thres_sd, thres_vel+thres_sd, color='#808080', alpha=0.3)
     ax.text(thres_vel, -10, thres_name, rotation=90, va='top', ha='center')
     ax.set_ylim(ylim)
+    ax.set_yticks([0, 1*10**7, 2*10**7, 3*10**7, 4*10**7, 5*10**7])
+    ax.set_yticklabels(['0', '1 10$^7$','2 10$^7$', '3 10$^7$', '4 10$^7$', '5 10$^7$'])
     ax.set_xlim([vel_bins[0], vel_bins[-2]])
 
     # percentage exceedance

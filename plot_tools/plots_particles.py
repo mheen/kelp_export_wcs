@@ -22,6 +22,7 @@ import cartopy.crs as ccrs
 from warnings import warn
 import numpy as np
 from datetime import date, datetime, timedelta
+import cmocean
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter

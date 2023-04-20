@@ -51,7 +51,7 @@ class KelpProbability:
         if show is True:
             plt.show()
         else:
-            return ax
+            return ax, cbar, c
 
     @staticmethod
     def read_from_tiff(input_path:str, log_info=True) -> tuple:
