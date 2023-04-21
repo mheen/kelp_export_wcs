@@ -172,8 +172,10 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # ---------------------------------------------------------------------------------
 # input_path_p_baseline = f'{pts_dir}cwa_perth_MarAug2017_baseline.nc'
 # input_path_p_threshold = f'{pts_dir}sensitivity/cwa_perth_MarAug2017_thresholdvel.nc'
+# input_path_p_logarithmic = f'{pts_dir}sensitivity/cwa_perth_MarAug2017_logarithmicvel.nc'
 # p_baseline = Particles.read_from_netcdf(input_path_p_baseline)
 # p_threshold = Particles.read_from_netcdf(input_path_p_threshold)
+# p_logarithmic = Particles.read_from_netcdf(input_path_p_logarithmic)
 
 # --- Particle density comparison ---
 def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:DensityGrid,
@@ -228,6 +230,13 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
 # pd_grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
 # density_baseline = get_particle_density(pd_grid, p_baseline.lon, p_baseline.lat)
 # density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
+# density_logarithmic = get_particle_density(pd_grid, p_logarithmic.lon, p_logarithmic.lat)
+
+# output_pd_log_comparison = f'{plots_dir}figure_s6.jpg'
+# plot_particle_density_comparison(density_baseline, density_logarithmic, pd_grid,
+#                                  p_baseline, p_logarithmic, h_deep_sea,
+#                                  location_info, 'Baseline Mar-Aug 2017', 'Logarithmic vel. Mar-Aug 2017',
+#                                  output_pd_log_comparison)
 
 # output_pd_thres_comparison = f'{plots_dir}figure_s8.jpg'
 # plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
