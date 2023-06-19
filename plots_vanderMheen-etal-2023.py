@@ -1,17 +1,22 @@
 from tools import log
+from tools.files import get_dir_from_json
+from tools.timeseries import add_month_to_time
 from data.kelp_data import KelpProbability
-from data.roms_data import read_roms_grid_from_netcdf
+from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs
+from data.roms_data import get_cross_shelf_velocity_component, get_eta_xi_along_depth_contour
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.general import add_subtitle
 from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.units as munits
 import cartopy.crs as ccrs
 import numpy as np
+import pandas as pd
 import cmocean
+import os
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
@@ -26,11 +31,37 @@ ocean_blue = '#25419e'
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 
+def save_bottom_cross_shelf_velocities(location_name='perth',
+                                       h_level=100,
+                                       max_s_layer=3):
+    location_info = get_location_info(location_name)
+
+    roms_dir = f'{get_dir_from_json("roms_data")}2017/'
+    date0 = datetime(2017, 1, 1)
+    n_months = 12
+    time_monthly = []
+    u_cross_monthly_spatial = []
+    for n in range(n_months):
+        start_date = add_month_to_time(date0, n)
+        end_date = add_month_to_time(date0, n+1)-timedelta(days=1)
+        roms = read_roms_data_from_multiple_netcdfs(roms_dir, start_date, end_date,
+                                                    lon_range=location_info.lon_range,
+                                                    lat_range=location_info.lat_range)
+        u_cross = get_cross_shelf_velocity_component(roms)
+        eta, xi = get_eta_xi_along_depth_contour(roms.grid, h_level=h_level)
+        # monthly means
+        time_monthly.append(start_date)
+        u_cross_monthly_spatial.append(np.nanmean(np.nanmean(u_cross[:, 0:max_s_layer, eta, xi], axis=0), axis=0))
+
+    df_s = pd.DataFrame(np.array(u_cross_monthly_spatial).transpose(), columns=time_monthly)
+    df_s.to_csv(f'temp_data/{location_name}_monthly_mean_u_cross_{h_level}m.csv', index=False)
+
 def figure1(show=True, output_path=None):
 
     fig = plt.figure(figsize=(12, 8))
     plt.subplots_adjust(wspace=0.35)
 
+    # (a) kelp probability map
     location_info_p = get_location_info('perth')
     kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
     ax1 = plt.subplot(3, 3, (1, 4), projection=ccrs.PlateCarree())
@@ -44,6 +75,7 @@ def figure1(show=True, output_path=None):
     cbar1.set_label('Probability of kelp')
     add_subtitle(ax1, '(a) Perth kelp reefs')
 
+    # (c) bathymetry and oceanography overview
     location_info_pw = get_location_info('perth_wide')
     ax3 = plt.subplot(3, 3, (2, 6), projection=ccrs.PlateCarree())
     ax3 = plot_basic_map(ax3, location_info_pw, ymarkers='off')
@@ -56,7 +88,7 @@ def figure1(show=True, output_path=None):
     add_subtitle(ax3, '(c) Main oceanographic features')
     # ax3.set_position([l3+0.02, b3+0.05, w3, h3])
 
-    # detritus production from de Bettignies et al. (2013)
+    # (b) detritus production from de Bettignies et al. (2013)
     time_detritus = ['Mar-May', 'Jun-Jul', 'Sep-Oct', 'Dec-Feb']
     detritus = [4.8, 2.12, 0.70, 0.97]
     detritus_sd = [1.69, 0.84, 0.45, 0.81]
@@ -69,7 +101,27 @@ def figure1(show=True, output_path=None):
     l2, b2, w2, h2 = ax2.get_position().bounds
     ax2.set_position([l1, b2, w1+0.03, h2])
 
+    # (c) cross-shore transport histogram
+    csv_ucross = 'temp_data/perth_monthly_mean_u_cross_100m.csv'
+    if not os.path.exists(csv_ucross):
+        save_bottom_cross_shelf_velocities()
+    df = pd.read_csv(csv_ucross)
+    time_cross = [datetime.strptime(d, '%Y-%m-%d') for d in df.columns.values]
+    str_time_cross = [d.strftime('%b') for d in time_cross]
+    ucross = [np.nanmean(df.iloc[:, i].values) for i in range(len(df.columns))]
 
+    ax4 = plt.subplot(3, 3, (8, 9))
+    ax4.bar(np.arange(len(time_cross)), ucross, color=ocean_blue, tick_label=str_time_cross)
+    xlim = ax4.get_xlim()
+    ax4.plot([-1, 12], [0, 0], '-k')
+    ax4.set_xlim(xlim)
+    ax4.set_ylim([-0.05, 0.05])
+    ax4.set_ylabel('Offshore transport (m/s)')
+    ax4.yaxis.set_label_position("right")
+    ax4.yaxis.tick_right()
+    add_subtitle(ax4, '(d) Monthly mean offshore transport')
+    l4, b4, w4, h4 = ax4.get_position().bounds
+    ax4.set_position([l3, b4, w3, h4])
 
     if show is True:
         plt.show()
@@ -78,7 +130,24 @@ def figure1(show=True, output_path=None):
         log.info(f'Saving figure to: {output_path}')
         plt.savefig(output_path, bbox_inches='tight', dpi=300)
 
-    plt.close()
+        plt.close()
+
+def figure6(show=True, output_path=None):
+
+    # (a) map of original location as % making it past shelf
+
+    # (b) map of mean cross-shelf transport in Perth region
+
+    # (c) example particle tracks from different reefs
+
+    if show is True:
+        plt.show()
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+        plt.close()
 
 if __name__ == '__main__':
-    figure1()
+    figure1(output_path='fig1.jpg')
