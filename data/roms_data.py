@@ -20,6 +20,7 @@ from scipy import spatial
 from scipy.ndimage import gaussian_filter
 import warnings
 import shutil
+import matplotlib.pyplot as plt
 
 def bbox2ij(lon:np.ndarray, lat:np.ndarray, bbox:list) -> tuple:
     '''Return indices for i,j that will completely cover the specified bounding box.     
@@ -385,6 +386,28 @@ def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float,
     xi_unique = unique_coords_list[1]
     
     return eta_unique, xi_unique
+
+def get_eta_xi_along_depth_contour(roms_grid:RomsGrid, h_level=100) -> tuple[np.ndarray, np.ndarray]:
+    levels = [0, 10, 20, 50, 100, 200, 400, 600, 1000]
+
+    try:
+        i_level = levels.index(h_level)
+    except:
+        raise ValueError(f'Levels does not contain {h_level}. Please request a valid value: {levels}')
+
+    ax = plt.axes()
+    contour_set = ax.contour(roms_grid.lon, roms_grid.lat, roms_grid.h, levels=levels)
+
+    contour_line = contour_set.collections[i_level].get_paths()[0]
+    contour_line_coords = contour_line.vertices
+    lons = contour_line_coords[:, 0]
+    lats = contour_line_coords[:, 1]
+
+    plt.close()
+
+    eta, xi = roms_grid.get_eta_xi_of_lon_lat_point(lons, lats)
+
+    return eta, xi
 
 def get_distance_along_transect(lons:np.ndarray, lats:np.ndarray):
     distance = [0]
