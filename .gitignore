@@ -4,6 +4,7 @@ input/dirs.json
 *.pickle
 test*
 temp_*
+*.jpg
 
 .vscode/*
 
