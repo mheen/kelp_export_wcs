@@ -387,7 +387,7 @@ def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float,
     
     return eta_unique, xi_unique
 
-def get_eta_xi_along_depth_contour(roms_grid:RomsGrid, h_level=100) -> tuple[np.ndarray, np.ndarray]:
+def get_lon_lat_along_depth_contour(roms_grid:RomsGrid, h_level=100) -> tuple[np.ndarray, np.ndarray]:
     levels = [0, 10, 20, 50, 100, 200, 400, 600, 1000]
 
     try:
@@ -405,6 +405,10 @@ def get_eta_xi_along_depth_contour(roms_grid:RomsGrid, h_level=100) -> tuple[np.
 
     plt.close()
 
+    return lons, lats
+
+def get_eta_xi_along_depth_contour(roms_grid:RomsGrid, h_level=100) -> tuple[np.ndarray, np.ndarray]:
+    lons, lats = get_lon_lat_along_depth_contour(roms_grid, h_level=h_level)
     eta, xi = roms_grid.get_eta_xi_of_lon_lat_point(lons, lats)
 
     return eta, xi
