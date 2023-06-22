@@ -29,11 +29,13 @@ def add_grid(ax:plt.axes, meridians:list, parallels:list,
 
     return ax
 
-def plot_basic_map(ax:plt.axes, location_info:LocationInfo, xmarkers='bottom', ymarkers='left', draw_grid=False) -> plt.axes:
+def plot_basic_map(ax:plt.axes, location_info:LocationInfo,
+                   xmarkers='bottom', ymarkers='left',
+                   draw_grid=False, zorder_c=5) -> plt.axes:
     shp = shapereader.Reader('input/GSHHS_coastline_GSR.shp')
     for _, geometry in zip(shp.records(), shp.geometries()):
         ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='#989898',
-                           edgecolor='black', zorder=5)
+                           edgecolor='black', zorder=zorder_c)
     
     ax = add_grid(ax, location_info.meridians, location_info.parallels, xmarkers, ymarkers, draw_grid)
 
