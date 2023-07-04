@@ -10,6 +10,7 @@ from particles import Particles, get_particle_density, DensityGrid
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.general import add_subtitle
 from plot_tools.plots_bathymetry import plot_contours
+from plot_tools.plots_particles import plot_age_in_deep_sea, plot_particle_age_in_deep_sea_depending_on_depth
 from location_info import LocationInfo, get_location_info
 from datetime import datetime, date, timedelta
 import matplotlib.pyplot as plt
@@ -38,6 +39,9 @@ kelp_green = '#1b7931'
 ocean_blue = '#25419e'
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+
+k = -0.075
+k_sd = 0.031
 
 def save_bottom_cross_shelf_velocities(location_name='perth_wide',
                                        h_level=100,
@@ -143,6 +147,62 @@ def figure1(show=True, output_path=None):
     l4, b4, w4, h4 = ax4.get_position().bounds
     ax4.set_position([l3, b4, w3, h4])
 
+    if show is True:
+        plt.show()
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+        plt.close()
+
+def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
+            colors=[kelp_green, kelp_green, kelp_green, kelp_green, 'k'],
+            linestyles=['-', '--', ':', '-.', '--'],
+            show=True, output_path=None):
+    
+    fig = plt.figure(figsize=(6, 8))
+    
+    xlim = [0, 120]
+    
+    # (a) age in deep sea for different depths
+    ax1 = plt.subplot(2, 1, 1)
+    ax1, l1 = plot_particle_age_in_deep_sea_depending_on_depth(particles, h_deep_sea_sensitivity=h_deep_seas,
+                                                               linestyles=linestyles,
+                                                               colors=colors,
+                                                               ax=ax1, show=False)
+    l1.remove()
+    ax1.set_ylabel('Particles past depth range (%)')
+    ax1.set_xlim(xlim)
+    add_subtitle(ax1, '(a) Particle export')
+    
+    # (b) age in deep sea with composition
+    ax2 = plt.subplot(2, 1, 2)
+    
+    for i, h_deep_sea in enumerate(h_deep_seas):
+        _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
+        n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
+        total_particles = particles.lon.shape[0]
+        f_deep_sea_per_age = n_deep_sea_per_age/total_particles*100 # divided by total # particles
+        f_cumulative_per_age = np.cumsum(f_deep_sea_per_age)
+        f_decomposed = f_cumulative_per_age*np.exp(k*age_arriving_ds)    
+
+        ax2.plot(age_arriving_ds, f_decomposed, color=colors[i], linestyle=linestyles[i], label=h_deep_sea)
+        
+        if h_deep_sea == 200:
+            f_decomposed_min = f_cumulative_per_age*np.exp((k-k_sd)*age_arriving_ds)
+            f_decomposed_max = f_cumulative_per_age*np.exp((k+k_sd)*age_arriving_ds)
+            ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=colors[i], alpha=0.5)
+        
+    ax2.set_xlabel('Particle age (days)')
+    ax2.set_ylabel('Particles past depth range\naccounting for decomposition (%)')
+    ax2.set_ylim([0, 30])
+    ax2.set_xlim(xlim)
+    ax2.grid(True, linestyle='--', alpha=0.5)
+    add_subtitle(ax2, '(b) Decomposed particle export')
+    
+    l2 = ax2.legend(title='Depth (m)', loc='upper right', bbox_to_anchor=(0.99, 1.01))
+    
     if show is True:
         plt.show()
 
@@ -321,4 +381,7 @@ if __name__ == '__main__':
 
     particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     particles = Particles.read_from_netcdf(particle_path)
-    figure6(particles, output_path='fig6.jpg', show=False)
+    
+    figure4(particles, output_path='fig4.jpg', show=False)
+    
+    # figure6(particles, output_path='fig6.jpg', show=False)
