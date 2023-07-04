@@ -213,8 +213,7 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
         plt.close()
 
 def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
-            input_perth_reefs='input/perth_kelp_reefs-p08.shp',
-            dx=0.01, vmin=0, vmax=100, cmap='plasma',
+            dx=0.02, vmin=0, vmax=0.2, cmap='plasma',
             dx_c=0.02, lon_c=115.43,
             int_t=8,
             show=True, output_path=None):
@@ -222,69 +221,42 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lon_examples = [115.52, 115.59, 115.32, 115.32, 115.55, 115.63]
     lat_examples = [-32.25, -32.6, -32.4, -31.8, -31.83, -31.72]
 
-    fig = plt.figure(figsize=(9, 12))
-    plt.subplots_adjust(hspace=0.1, wspace=0.1)
+    fig = plt.figure(figsize=(12, 6))
+    plt.subplots_adjust(hspace=0.1, wspace=0.2)
 
     location_info = get_location_info('perth')
 
-    # (a) map of original location as % making it past shelf
-    l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
-    l_deep_sea_any_time = np.any(l_deep_sea, axis=1).astype('bool')
-
-    lon0 = particles.lon0
-    lat0 = particles.lat0
-    lon0_ds = particles.lon0[l_deep_sea_any_time]
-    lat0_ds = particles.lat0[l_deep_sea_any_time]
+    # (a) contribution to offshore export from initial locations
+    t_release = particles.get_release_time_index()
+    p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
     
-    # # alternative method using reef polygons
-    # sf = shapefile.Reader(input_perth_reefs)
-    # shapes = sf.shapes()
-    # polygons = [Polygon(shape.points) for shape in shapes]
+    dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
     
-    # values = []
-    # for polygon in polygons:
-    #     l_ds = [polygon.contains(Point(lon0_ds[i], lat0_ds[i])) for i in range(len(lon0_ds))]
-    #     values.append(np.sum(l_ds))
-    # values = np.array(values)
-
-    # normalized_values = values/np.sum(values)*100
-    # patches = [mpl_polygon(list(p.exterior.coords), closed=True) for p in polygons]
-    # collection = PatchCollection(patches, cmap=cmap, clim=(vmin, vmax))
-    # collection.set_array(normalized_values)
-
-    if filter_kelp_prob is not None:
-        kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
-        kelp_prob0 = kelp_prob.get_kelp_probability_at_point(lon0, lat0)
-        l_kelp0 = kelp_prob0>=filter_kelp_prob
-        lon0 = lon0[l_kelp0]
-        lat0 = lat0[l_kelp0]
-        
-        kelp_prob_ds = kelp_prob.get_kelp_probability_at_point(lon0_ds, lat0_ds)
-        l_kelp_ds = kelp_prob_ds>=filter_kelp_prob
-        lon0_ds = lon0_ds[l_kelp_ds]
-        lat0_ds = lat0_ds[l_kelp_ds]
+    # fraction of decomposed particles first arriving in deep sea
+    f_ds = np.exp(k*dt_ds)
+    lon0_ds = particles.lon0[p_ds]
+    lat0_ds = particles.lat0[p_ds]
     
     grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
-    density0 = get_particle_density(grid, lon0, lat0)
-    density_ds = get_particle_density(grid, lon0_ds, lat0_ds)
+    density_ds0 = get_particle_density(grid, lon0_ds, lat0_ds, values=f_ds)
+    density_ds0_norm = density_ds0/np.sum(f_ds)*100
     
     x, y = np.meshgrid(grid.lon, grid.lat)
-    z = density_ds/density0*100
+    z = np.copy(density_ds0_norm)
     z[z==0.] = np.nan
 
-    ax1 = plt.subplot(2, 2, 1, projection=ccrs.PlateCarree())
+    ax1 = plt.subplot(1, 3, 1, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
     ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax1, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
     c1 = ax1.pcolormesh(x, y, z, vmin=vmin, vmax=vmax, cmap=cmap)
-    # c1 = ax1.add_collection(collection) # method to plot polygons instead
     l1, b1, w1, h1 = ax1.get_position().bounds
     cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
     cbar1 = plt.colorbar(c1, cax=cbax1)
-    cbar1.set_label(f'Percentage of particles from release location passing shelf\n(% / {dx}x{dx} grid cells)')
-    add_subtitle(ax1, '(a) Particles passing shelf')
+    cbar1.set_label(f'Origin of particles passing shelf break (%)')
+    add_subtitle(ax1, '(a) Contribution to export')
     ax1.plot(lon_examples, lat_examples, 'xk')
 
     # (b) map of mean cross-shelf transport in Perth region
@@ -315,52 +287,40 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lat_coords = lat_bins[:-1]+np.diff(lat_bins)
     lon_coords = np.ones(len(lat_coords))*lon_c
 
-    ax2 = plt.subplot(2, 2, 2, projection=ccrs.PlateCarree())
+    ax2 = plt.subplot(1, 3, 2, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info, zorder_c=1)
-    # ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
-    #                     ax=ax2, show=False, show_perth_canyon=False,
-    #                     color='k', linewidths=0.7)
     q = ax2.quiver(lon_coords, lat_coords, -ucross_bins, np.zeros(len(ucross_bins)))
     ax2.quiverkey(q, 0.88, 0.02, 0.1, label='0.1 m/s', labelpos='W')
     ax2.set_yticklabels([])
     add_subtitle(ax2, '(b) Makuru cross-shelf transport')
 
     l2, b2, w2, h2 = ax2.get_position().bounds
-    w_t = w2/3
-    xlim = [-0.3, 0.3]
-
-    # ax3 = fig.add_axes([l2, b2, w_t, h2])
-    # ax3.plot(-ucross, distance, ':', linewidth=2, color='#322992', label='200')
-    # ax3.barh(distance, -ucross, color=ocean_blue) # preferably quiver instead of bar
-    # ax3.plot([0, 0], [distance[0], distance[-1]], '-', color='k', alpha=0.5)
-    # ax3.set_xlim(xlim)
-    # ax3.set_ylim([distance[0], distance[-1]])
-    # ax3.axis('off')
 
     # (c) example particle tracks from different reefs
     p_ex = []
-    lon0 = particles.lon0[l_deep_sea_any_time]
-    lat0 = particles.lat0[l_deep_sea_any_time]
+    lon0 = particles.lon0[p_ds]
+    lat0 = particles.lat0[p_ds]
     for i in range(len(lon_examples)):
         p_ex.append(get_index_closest_point(lon0, lat0, lon_examples[i], lat_examples[i])[0])
     
-    location_info_w = get_location_info('cwa_perth')
-    ax4 = plt.subplot(2, 2, (3, 4), projection=ccrs.PlateCarree())
+    location_info_w = get_location_info('perth_wide_south')
+    ax4 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
     ax4 = plot_basic_map(ax4, location_info_w)
     ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
                         ax=ax4, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
-    lon = particles.lon[l_deep_sea_any_time, :]
-    lat = particles.lat[l_deep_sea_any_time, :]
+    lon = particles.lon[p_ds, :]
+    lat = particles.lat[p_ds, :]
     cm = mpl.colormaps['summer']
     for i in range(len(p_ex)):
         color = cm(i/(len(p_ex)-1))
-        ax4.plot(lon[p_ex[i], :], lat[p_ex[i], :], '-', color=color)
-        ax4.plot(lon[p_ex[i], ::int_t], lat[p_ex[i], ::int_t], '.', color=color)
+        ax4.plot(lon[p_ex[i], :t_ds[p_ex[i]]], lat[p_ex[i], :t_ds[p_ex[i]]], '-', color=color)
+        ax4.plot(lon[p_ex[i], :t_ds[p_ex[i]]:int_t], lat[p_ex[i], :t_ds[p_ex[i]]:int_t], '.', color=color)
         ax4.plot(lon0[p_ex[i]], lat0[p_ex[i]], 'xk')
+        ax4.plot(lon[p_ex[i], t_ds[p_ex[i]]], lat[p_ex[i], t_ds[p_ex[i]]], 'ok')
         
-    add_subtitle(ax4, '(c) Example trajectories of particles moving past shelf')
+    add_subtitle(ax4, '(c) Example particle trajectories')
 
     if show is True:
         plt.show()
@@ -382,6 +342,6 @@ if __name__ == '__main__':
     particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     particles = Particles.read_from_netcdf(particle_path)
     
-    figure4(particles, output_path='fig4.jpg', show=False)
+    # figure4(particles, output_path='fig4.jpg', show=False)
     
-    # figure6(particles, output_path='fig6.jpg', show=False)
+    figure6(particles, output_path='fig6.jpg', show=False)

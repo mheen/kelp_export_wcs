@@ -245,7 +245,8 @@ class DensityGrid:
         return lon_index, lat_index
 
 
-def get_particle_density(grid:DensityGrid, lon_p:np.ndarray, lat_p:np.ndarray) -> np.ndarray:
+def get_particle_density(grid:DensityGrid, lon_p:np.ndarray, lat_p:np.ndarray,
+                         values=1) -> np.ndarray:
     lon_index, lat_index = grid.get_index(lon_p, lat_p)
     
     density = np.zeros((len(grid.lat), len(grid.lon)))
@@ -254,7 +255,7 @@ def get_particle_density(grid:DensityGrid, lon_p:np.ndarray, lat_p:np.ndarray) -
     x = lon_index[~np.isnan(lon_index)].astype('int')
     y = lat_index[~np.isnan(lat_index)].astype('int')
     index_1d = np.ravel_multi_index(np.array([y, x]), density.shape)
-    np.add.at(density_1d, index_1d, 1)
+    np.add.at(density_1d, index_1d, values)
     density = density_1d.reshape(density.shape)
 
     return density
