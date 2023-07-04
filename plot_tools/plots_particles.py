@@ -292,12 +292,13 @@ def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
                                                      h_deep_sea_sensitivity=[200, 400, 600, 800, 1000, 2500, 5000],
                                                      colors = ['#1b7931', '#1c642a', '#1a5023', '#183d1d', '#142a16', '#0e190e', '#000000'],
                                                      linestyles = ['--', ':', '-', '-.', '--', ':', '-'],
-                                                     output_path=None, show=True) -> plt.axes:
+                                                     output_path=None, show=True, ax=None) -> plt.axes:
     
     labels = h_deep_sea_sensitivity
 
-    fig = plt.figure(figsize=(10, 5))
-    ax = plt.axes()
+    if ax is None:
+        fig = plt.figure(figsize=(10, 5))
+        ax = plt.axes()
     for i, h in enumerate(h_deep_sea_sensitivity):
         ax = _plot_age_in_deep_sea_cumulative_only(ax, particles, h, color=colors[i], linestyle=linestyles[i], label=labels[i])
     ax.set_xlim([0, 150])
@@ -306,7 +307,7 @@ def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
     ax.set_ylabel('Cumulative particles\npassing depth range (%)')
     ax.grid(True, linestyle='--', alpha=0.5)
     
-    ax.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
+    l = ax.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
     
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -315,7 +316,7 @@ def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
     if show is True:
         plt.show()
     else:
-        return ax
+        return ax, l
 
 def plot_age_in_deep_sea(particles:Particles, h_deep_sea:float, total_particles=None,
                          color='#1b7931', age_lim=None, color_cumulative='k',
