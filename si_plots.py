@@ -4,6 +4,7 @@ from tools import log
 from data.bathymetry_data import BathymetryData
 from data.roms_data import read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
 from data.climate_data import read_dmi_data, read_mei_data
+from data.kelp_data import KelpProbability
 from plot_tools.general import add_subtitle
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
@@ -45,7 +46,7 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # time_mei, mei = read_mei_data()
 # time_dmi, dmi = read_dmi_data()
 
-# output_path = f'{plots_dir}figure_s1.jpg'
+# output_path = f'{plots_dir}figs1.jpg'
 # xlim = [datetime(2000, 1, 1), datetime(2023, 1, 1)]
 
 # fig = plt.figure(figsize=(10, 10))
@@ -74,7 +75,7 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # # --- Horizontal resolution ---
 # dx = np.sqrt(1/roms_grid.pm*1/roms_grid.pn) # square root of grid cell areas for approximate resolution (m)
 
-# output_resolution = f'{plots_dir}figure_s3.jpg'
+# output_resolution = f'{plots_dir}figs3.jpg'
 
 # ax = plt.axes(projection=ccrs.PlateCarree())
 # ax = plot_basic_map(ax, location_info)
@@ -92,13 +93,13 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # thres_sd = 0.016#, 0.015]
 # thres_name = 'Ecklonia'#, 'Ecklonia (medium)']
 
-# output_exceedance = f'{plots_dir}figure_s7.jpg'
+# output_exceedance = f'{plots_dir}figs7.jpg'
 
 # plot_exceedance_threshold_velocity(roms_dir, start_date, end_date, thres_vel, thres_sd, thres_name,
 #                                    location_info, output_exceedance)
 
 # # --- Bottom layer depth ---
-# output_bottom_layer_depth = f'{plots_dir}/figure_s4.jpg'
+# output_bottom_layer_depth = f'{plots_dir}/figs4.jpg'
 # layer_depth = roms_grid.z[1, :, :]-roms_grid.z[0, :, :]
 
 # ax = plt.axes(projection=ccrs.PlateCarree())
@@ -119,7 +120,7 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # # u(z) = u*/kappa*log(z/z0)
 # # u* = sqrt(tau_b)
 # # tau_b = kappa**2*u_sigma0**2/log**2(z_sigma0/z0)
-# output_logprofiles = f'{plots_dir}figure_s5.jpg'
+# output_logprofiles = f'{plots_dir}figs5.jpg'
 
 # kappa = 0.41 # von Karman constant
 # z0 = 1.65*10**(-5) # m bottom roughness
@@ -232,14 +233,113 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
 # density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
 # density_logarithmic = get_particle_density(pd_grid, p_logarithmic.lon, p_logarithmic.lat)
 
-# output_pd_log_comparison = f'{plots_dir}figure_s6.jpg'
+# output_pd_log_comparison = f'{plots_dir}figs6.jpg'
 # plot_particle_density_comparison(density_baseline, density_logarithmic, pd_grid,
 #                                  p_baseline, p_logarithmic, h_deep_sea,
 #                                  location_info, 'Baseline Mar-Aug 2017', 'Logarithmic vel. Mar-Aug 2017',
 #                                  output_pd_log_comparison)
 
-# output_pd_thres_comparison = f'{plots_dir}figure_s8.jpg'
+# output_pd_thres_comparison = f'{plots_dir}figs8.jpg'
 # plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
 #                                  p_baseline, p_threshold, h_deep_sea,
 #                                  location_info, 'Baseline Mar-Aug 2017', 'Threshold vel. Mar-Aug 2017',
 #                                  output_pd_thres_comparison)
+
+# ---------------------------------------------------------------------------------
+# REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
+# ---------------------------------------------------------------------------------
+
+output_reefs = 'figs9.jpg'
+h_deep_sea = 200
+dx = 0.02
+location_info_p = get_location_info('perth')
+
+grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
+x, y = np.meshgrid(grid.lon, grid.lat)
+
+fig = plt.figure(figsize=(12, 6))
+plt.subplots_adjust(wspace=0.7)
+
+# (a) kelp probability map
+kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+ax1 = plt.subplot(1, 4, 1, projection=ccrs.PlateCarree())
+ax1 = plot_basic_map(ax1, location_info_p)
+ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+ax1, cbar1, c1 = kelp_prob.plot(location_info_p, ax=ax1, show=False)
+cbar1.remove()
+l1, b1, w1, h1 = ax1.get_position().bounds
+cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
+cbar1 = plt.colorbar(c1, cax=cbax1)
+cbar1.set_label('Probability of kelp')
+add_subtitle(ax1, '(a) Kelp probability')
+
+# (b) release # particles
+particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
+particles = Particles.read_from_netcdf(particle_path)
+
+density0 = get_particle_density(grid, particles.lon0, particles.lat0)
+density0[density0==0] = np.nan
+
+ax2 = plt.subplot(1, 4, 2, projection=ccrs.PlateCarree())
+ax2 = plot_basic_map(ax2, location_info_p)
+ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                    ax=ax2, show=False, show_perth_canyon=False,
+                    color='k', linewidths=0.7)
+
+c2 = ax2.pcolormesh(x, y, density0, cmap='plasma', vmin=0, vmax=200)
+ax2.set_yticklabels([])
+l2, b2, w2, h2 = ax2.get_position().bounds
+cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
+cbar2 = plt.colorbar(c2, cax=cbax2)
+cbar2.set_label('# particles released')
+add_subtitle(ax2, '(b) Particles released')
+
+# (c) # particles past shelf from initial location
+l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
+l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
+
+density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
+                                   particles.lat0[l_deep_sea_anytime])
+density_ds0[density_ds0==0.] = np.nan
+
+ax3 = plt.subplot(1, 4, 3, projection=ccrs.PlateCarree())
+ax3 = plot_basic_map(ax3, location_info_p)
+ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                    ax=ax3, show=False, show_perth_canyon=False,
+                    color='k', linewidths=0.7)
+
+c3 = ax3.pcolormesh(x, y, density_ds0, cmap='plasma', vmin=0, vmax=200)
+ax3.set_yticklabels([])
+l3, b3, w3, h3 = ax3.get_position().bounds
+cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
+cbar3 = plt.colorbar(c3, cax=cbax3)
+cbar3.set_label('# particles passing shelf')
+add_subtitle(ax3, '(c) Passing shelf')
+
+# (d) mean time to get past shelf
+t_release = particles.get_release_time_index()
+p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+
+density_time_ds = get_particle_density(grid, particles.lon0[p_ds], particles.lat0[p_ds],
+                                       values=dt_ds)
+density_mean_dt = density_time_ds/density_ds0
+density_mean_dt[density_mean_dt==0.] = np.nan
+
+ax4 = plt.subplot(1, 4, 4, projection=ccrs.PlateCarree())
+ax4 = plot_basic_map(ax4, location_info_p)
+ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                    ax=ax4, show=False, show_perth_canyon=False,
+                    color='k', linewidths=0.7)
+
+c4 = ax4.pcolormesh(x, y, density_mean_dt, cmap=cmocean.cm.deep, vmin=0, vmax=30)
+ax4.set_yticklabels([])
+l4, b4, w4, h4 = ax4.get_position().bounds
+cbax4 = fig.add_axes([l4+w4+0.01, b4, 0.02, h4])
+cbar4 = plt.colorbar(c4, cax=cbax4)
+cbar4.set_label('Mean time for particles to pass shelf (days)')
+add_subtitle(ax4, '(c) Mean time')
+
+log.info(f'Saving figure to: {output_reefs}')
+plt.savefig(output_reefs, bbox_inches='tight', dpi=300)
+plt.close()
