@@ -171,7 +171,6 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
                                                                linestyles=linestyles,
                                                                colors=colors,
                                                                ax=ax1, show=False)
-    l1.remove()
     ax1.set_ylabel('Particles past depth range (%)')
     ax1.set_xlim(xlim)
     add_subtitle(ax1, '(a) Particle export')
@@ -182,26 +181,28 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
     for i, h_deep_sea in enumerate(h_deep_seas):
         _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
         n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
+        n_deep_sea_decomposed = n_deep_sea_per_age*np.exp(k*age_arriving_ds)
         total_particles = particles.lon.shape[0]
-        f_deep_sea_per_age = n_deep_sea_per_age/total_particles*100 # divided by total # particles
-        f_cumulative_per_age = np.cumsum(f_deep_sea_per_age)
-        f_decomposed = f_cumulative_per_age*np.exp(k*age_arriving_ds)    
+        f_deep_sea_decomposed = n_deep_sea_decomposed/total_particles*100
+        f_decomposed = np.cumsum(f_deep_sea_decomposed)
 
         ax2.plot(age_arriving_ds, f_decomposed, color=colors[i], linestyle=linestyles[i], label=h_deep_sea)
         
         if h_deep_sea == 200:
-            f_decomposed_min = f_cumulative_per_age*np.exp((k-k_sd)*age_arriving_ds)
-            f_decomposed_max = f_cumulative_per_age*np.exp((k+k_sd)*age_arriving_ds)
+            n_deep_sea_decomposed_min = n_deep_sea_per_age*np.exp((k-k_sd)*age_arriving_ds)
+            n_deep_sea_decomposed_max = n_deep_sea_per_age*np.exp((k+k_sd)*age_arriving_ds)
+            f_decomposed_min = np.cumsum(n_deep_sea_decomposed_min/total_particles*100)
+            f_decomposed_max = np.cumsum(n_deep_sea_decomposed_max/total_particles*100)
             ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=colors[i], alpha=0.5)
         
     ax2.set_xlabel('Particle age (days)')
     ax2.set_ylabel('Particles past depth range\naccounting for decomposition (%)')
-    ax2.set_ylim([0, 30])
+    ax2.set_ylim([0, 50])
     ax2.set_xlim(xlim)
     ax2.grid(True, linestyle='--', alpha=0.5)
     add_subtitle(ax2, '(b) Decomposed particle export')
     
-    l2 = ax2.legend(title='Depth (m)', loc='upper right', bbox_to_anchor=(0.99, 1.01))
+    # l2 = ax2.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
     
     if show is True:
         plt.show()
@@ -352,6 +353,6 @@ if __name__ == '__main__':
     particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     particles = Particles.read_from_netcdf(particle_path)
     
-    # figure4(particles, output_path='fig4.jpg', show=False)
+    figure4(particles, output_path='fig4.jpg', show=False)
     
-    figure6(particles, output_path='fig6.jpg', show=False)
+    # figure6(particles, output_path='fig6.jpg', show=False)
