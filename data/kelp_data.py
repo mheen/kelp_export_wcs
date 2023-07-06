@@ -80,7 +80,7 @@ def generate_random_releases_based_on_probability(rng: np.random.default_rng, in
     kelp_prob = KelpProbability.read_from_tiff(input_path, log_info=log_info)
     # random release depending on kelp probability
     random_ints_prob = rng.integers(1, high=100, size=kelp_prob.prob.shape)
-    l_prob = random_ints_prob >= kelp_prob.prob
+    l_prob = random_ints_prob <= kelp_prob.prob*100
     
     if n_thin is None or n_thin == 0:
         l_release = l_prob
