@@ -50,7 +50,12 @@ def get_pts_config(input_path:str) -> PtsConfig:
     region_name = config[pts_section_header]['region_name']
     input_dir = get_dir_from_json(config[pts_section_header]['input_dir'])
     output_dir = get_dir_from_json(config[pts_section_header]['output_dir'])
-    n_thin_inital = int(config[pts_section_header]['n_thin_initial'])
+    
+    n_thin_initial = config[pts_section_header]['n_thin_initial'].split(',')
+    n_thin_initial = [int(n) for n in n_thin_initial]
+    if len(n_thin_initial) == 1:
+        n_thin_initial = n_thin_initial[0]
+    
     dt = timedelta(seconds=int(config[pts_section_header]['dt']))
     dt_out = timedelta(seconds=int(config[pts_section_header]['dt_out']))
     export_variables = [i.strip() for i in config[pts_section_header]['export_variables'].split(',')]
@@ -68,7 +73,7 @@ def get_pts_config(input_path:str) -> PtsConfig:
     input_dir_description = config[pts_section_header]['input_dir_description']
 
     pts_config = PtsConfig(start_date, end_date_releases, end_date_run, release_region, run_region, region_name,
-                           input_dir, output_dir, n_thin_inital, dt, dt_out, export_variables, elements,
+                           input_dir, output_dir, n_thin_initial, dt, dt_out, export_variables, elements,
                            reader, advection_scheme, vertical_advection, vertical_mixing, horizontal_diffusivity,
                            use_auto_landmask, coastline_action, grid_file, extra_description, sub_output_dir,
                            input_dir_description)

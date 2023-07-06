@@ -22,7 +22,14 @@ def get_releases(config:PtsConfig):
     lats0 = []
     n_particles = 0
     for t in times0:
-        lon0, lat0 = generate_random_releases_based_on_probability(rng, release_file, n_thin=config.n_thin_initial, log_info=False)
+        
+        if type(config.n_thin_initial) == list:
+            # makes it possible to release a different amount of particles each release month
+            n_thin = config.n_thin_initial[t.month-config.start_date.month]
+        else:
+            n_thin = config.n_thin_initial
+            
+        lon0, lat0 = generate_random_releases_based_on_probability(rng, release_file, n_thin=n_thin, log_info=False)
         lons0.append(lon0)
         lats0.append(lat0)
         n_particles += len(lon0)
