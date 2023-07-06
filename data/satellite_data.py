@@ -36,6 +36,14 @@ def read_satellite_sst_from_netcdf(input_path:str) -> SatelliteSST:
 
     return SatelliteSST(time, lon, lat, sst)
 
+def get_mean_sst_for_multiple_months(sst_data:SatelliteSST, req_months:list) -> SatelliteSST:
+    months = np.array([t.month for t in sst_data.time])
+    l_months = np.array([month in req_months for month in months])
+    
+    mean_sst = np.nanmean(sst_data.sst[l_months, :, :], axis=0)
+    
+    return SatelliteSST(np.array([datetime(1800, req_months[0], 1)]), sst_data.lon, sst_data.lat, mean_sst)
+
 def get_monthly_mean_sst(sst_data:SatelliteSST, month:int) -> SatelliteSST:
     months = np.array([t.month for t in sst_data.time])
     l_month = months==month
@@ -80,7 +88,12 @@ if __name__ == '__main__':
     input_path = f'{get_dir_from_json("satellite_sst")}IMOS_aggregation_gsr_monthly_mean_2012-2022.nc'
     sst_data = read_satellite_sst_from_netcdf(input_path)
 
-    month = 6
-    sst_month = get_monthly_mean_sst(sst_data, month)
-    output_path = f'{get_dir_from_json("satellite_sst")}gsr_monthly_mean_{sst_month.time[0].strftime("%B")}.nc'
-    write_sst_data_to_netcdf(sst_month, output_path)
+    # month = 6
+    # sst_month = get_monthly_mean_sst(sst_data, month)
+    # output_path = f'{get_dir_from_json("satellite_sst")}gsr_monthly_mean_{sst_month.time[0].strftime("%B")}.nc'
+    # write_sst_data_to_netcdf(sst_month, output_path)
+    
+    months = [6, 7]
+    sst_months = get_mean_sst_for_multiple_months(sst_data, months)
+    output_path = f'{get_dir_from_json("satellite_sst")}gsr_monthly_mean_makuru.nc'
+    write_sst_data_to_netcdf(sst_months, output_path)
