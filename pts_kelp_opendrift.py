@@ -1,12 +1,11 @@
 from config import PtsConfig, get_pts_config
 from tools.files import get_dir_from_json, create_dir_if_does_not_exist
 from tools import log
+from pts_tools.releases import get_releases
 from pts_tools import opendrift_reader_ROMS as reader_ROMS
 from pts_tools import opendrift_reader_ROMS_separate_gridfile as reader_ROMS_separate_grid
 from pts_tools.opendrift_bottomdrifters import BottomDrifters
 from pts_tools.opendrift_bottomthresholddrifters import BottomThresholdDrifters
-from pts_tools.releases import get_n_daily_release_times
-from data.kelp_data import generate_random_releases_based_on_probability
 from datetime import datetime, timedelta
 import numpy as np
 import sys
@@ -15,25 +14,6 @@ import os
 config_file = sys.argv[1]
 
 config = get_pts_config(config_file)
-
-def get_releases(config:PtsConfig):
-    rng = np.random.default_rng(42) # fix random seed to create random releases based on kelp probability
-    release_file = f'input/{config.release_region}_kelp_probability.tif'
-    if not os.path.exists(release_file):
-        raise ValueError(f'''Kelp probability file for specified release region {config.release_region}
-                             does not exist: {release_file}. Create this first.''')
-
-    times0 = get_n_daily_release_times(config.start_date, config.end_date_releases)
-    lons0 = []
-    lats0 = []
-    n_particles = 0
-    for t in times0:
-        lon0, lat0 = generate_random_releases_based_on_probability(rng, release_file, n_thin=config.n_thin_initial, log_info=False)
-        lons0.append(lon0)
-        lats0.append(lat0)
-        n_particles += len(lon0)
-    log.info(f'Created {n_particles} initial particle releases.')
-    return times0, lons0, lats0
 
 times0, lons0, lats0 = get_releases(config)
 

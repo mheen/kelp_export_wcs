@@ -2,10 +2,32 @@ import os, sys
 parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
+from config import PtsConfig
+from data.kelp_data import generate_random_releases_based_on_probability
 from tools.timeseries import add_month_to_time
+from tools import log
 from data.bathymetry_data import BathymetryData
 from datetime import datetime, timedelta
 import numpy as np
+
+def get_releases(config:PtsConfig):
+    rng = np.random.default_rng(42) # fix random seed to create random releases based on kelp probability
+    release_file = f'input/{config.release_region}_kelp_probability.tif'
+    if not os.path.exists(release_file):
+        raise ValueError(f'''Kelp probability file for specified release region {config.release_region}
+                             does not exist: {release_file}. Create this first.''')
+
+    times0 = get_n_daily_release_times(config.start_date, config.end_date_releases)
+    lons0 = []
+    lats0 = []
+    n_particles = 0
+    for t in times0:
+        lon0, lat0 = generate_random_releases_based_on_probability(rng, release_file, n_thin=config.n_thin_initial, log_info=False)
+        lons0.append(lon0)
+        lats0.append(lat0)
+        n_particles += len(lon0)
+    log.info(f'Created {n_particles} initial particle releases.')
+    return times0, lons0, lats0
 
 def get_lon_lat_releases_based_on_depth(min_depth:float, max_depth:float) -> tuple:
     bathymetry = BathymetryData.read_from_csv()
