@@ -248,8 +248,6 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
 # ---------------------------------------------------------------------------------
 # REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
 # ---------------------------------------------------------------------------------
-
-output_reefs = 'figs9.jpg'
 h_deep_sea = 200
 dx = 0.02
 location_info_p = get_location_info('perth')
@@ -257,89 +255,124 @@ location_info_p = get_location_info('perth')
 grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
 x, y = np.meshgrid(grid.lon, grid.lat)
 
-fig = plt.figure(figsize=(12, 6))
-plt.subplots_adjust(wspace=0.7)
-
-# (a) kelp probability map
-kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
-ax1 = plt.subplot(1, 4, 1, projection=ccrs.PlateCarree())
-ax1 = plot_basic_map(ax1, location_info_p)
-ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
-ax1, cbar1, c1 = kelp_prob.plot(location_info_p, ax=ax1, show=False)
-cbar1.remove()
-l1, b1, w1, h1 = ax1.get_position().bounds
-cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
-cbar1 = plt.colorbar(c1, cax=cbax1)
-cbar1.set_label('Probability of kelp')
-add_subtitle(ax1, '(a) Kelp probability')
-
-# (b) release # particles
 particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
 particles = Particles.read_from_netcdf(particle_path)
 
+# # --- Components that make up Figure 6A ---
+# output_reefs = 'figs9.jpg'
+
+# fig = plt.figure(figsize=(12, 6))
+# plt.subplots_adjust(wspace=0.7)
+
+# # (a) kelp probability map
+# kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+# ax1 = plt.subplot(1, 4, 1, projection=ccrs.PlateCarree())
+# ax1 = plot_basic_map(ax1, location_info_p)
+# ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+# ax1, cbar1, c1 = kelp_prob.plot(location_info_p, ax=ax1, show=False)
+# cbar1.remove()
+# l1, b1, w1, h1 = ax1.get_position().bounds
+# cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
+# cbar1 = plt.colorbar(c1, cax=cbax1)
+# cbar1.set_label('Probability of kelp')
+# add_subtitle(ax1, '(a) Kelp probability')
+
+# # (b) release # particles
+# density0 = get_particle_density(grid, particles.lon0, particles.lat0)
+# density0[density0==0] = np.nan
+
+# ax2 = plt.subplot(1, 4, 2, projection=ccrs.PlateCarree())
+# ax2 = plot_basic_map(ax2, location_info_p)
+# ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+#                     ax=ax2, show=False, show_perth_canyon=False,
+#                     color='k', linewidths=0.7)
+
+# c2 = ax2.pcolormesh(x, y, density0, cmap='plasma', vmin=0, vmax=200)
+# ax2.set_yticklabels([])
+# l2, b2, w2, h2 = ax2.get_position().bounds
+# cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
+# cbar2 = plt.colorbar(c2, cax=cbax2)
+# cbar2.set_label('# particles released')
+# add_subtitle(ax2, '(b) Particle release')
+
+# # (c) # particles past shelf from initial location
+# l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
+# l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
+
+# density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
+#                                    particles.lat0[l_deep_sea_anytime])
+# density_ds0[density_ds0==0.] = np.nan
+
+# ax3 = plt.subplot(1, 4, 3, projection=ccrs.PlateCarree())
+# ax3 = plot_basic_map(ax3, location_info_p)
+# ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+#                     ax=ax3, show=False, show_perth_canyon=False,
+#                     color='k', linewidths=0.7)
+
+# c3 = ax3.pcolormesh(x, y, density_ds0, cmap='plasma', vmin=0, vmax=200)
+# ax3.set_yticklabels([])
+# l3, b3, w3, h3 = ax3.get_position().bounds
+# cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
+# cbar3 = plt.colorbar(c3, cax=cbax3)
+# cbar3.set_label('# particles passing shelf')
+# add_subtitle(ax3, '(c) Passing shelf')
+
+# # (d) mean time to get past shelf
+# t_release = particles.get_release_time_index()
+# p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+# dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+
+# density_time_ds = get_particle_density(grid, particles.lon0[p_ds], particles.lat0[p_ds],
+#                                        values=dt_ds)
+# density_mean_dt = density_time_ds/density_ds0
+# density_mean_dt[density_mean_dt==0.] = np.nan
+
+# ax4 = plt.subplot(1, 4, 4, projection=ccrs.PlateCarree())
+# ax4 = plot_basic_map(ax4, location_info_p)
+# ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+#                     ax=ax4, show=False, show_perth_canyon=False,
+#                     color='k', linewidths=0.7)
+
+# c4 = ax4.pcolormesh(x, y, density_mean_dt, cmap=cmocean.cm.deep, vmin=0, vmax=30)
+# ax4.set_yticklabels([])
+# l4, b4, w4, h4 = ax4.get_position().bounds
+# cbax4 = fig.add_axes([l4+w4+0.01, b4, 0.02, h4])
+# cbar4 = plt.colorbar(c4, cax=cbax4)
+# cbar4.set_label('Mean time for particles to pass shelf (days)')
+# add_subtitle(ax4, '(c) Mean time')
+
+# log.info(f'Saving figure to: {output_reefs}')
+# plt.savefig(output_reefs, bbox_inches='tight', dpi=300)
+# plt.close()
+
+# --- Map with % making it to deep sea ---
+output_initial_ds = 'figs10.jpg'
+
 density0 = get_particle_density(grid, particles.lon0, particles.lat0)
-density0[density0==0] = np.nan
 
-ax2 = plt.subplot(1, 4, 2, projection=ccrs.PlateCarree())
-ax2 = plot_basic_map(ax2, location_info_p)
-ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-                    ax=ax2, show=False, show_perth_canyon=False,
-                    color='k', linewidths=0.7)
-
-c2 = ax2.pcolormesh(x, y, density0, cmap='plasma', vmin=0, vmax=200)
-ax2.set_yticklabels([])
-l2, b2, w2, h2 = ax2.get_position().bounds
-cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
-cbar2 = plt.colorbar(c2, cax=cbax2)
-cbar2.set_label('# particles released')
-add_subtitle(ax2, '(b) Particles released')
-
-# (c) # particles past shelf from initial location
 l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
 l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
 
 density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
                                    particles.lat0[l_deep_sea_anytime])
-density_ds0[density_ds0==0.] = np.nan
 
-ax3 = plt.subplot(1, 4, 3, projection=ccrs.PlateCarree())
-ax3 = plot_basic_map(ax3, location_info_p)
-ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-                    ax=ax3, show=False, show_perth_canyon=False,
-                    color='k', linewidths=0.7)
+density = density_ds0/density0*100
+density[density==0.] = np.nan
 
-c3 = ax3.pcolormesh(x, y, density_ds0, cmap='plasma', vmin=0, vmax=200)
-ax3.set_yticklabels([])
-l3, b3, w3, h3 = ax3.get_position().bounds
-cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
-cbar3 = plt.colorbar(c3, cax=cbax3)
-cbar3.set_label('# particles passing shelf')
-add_subtitle(ax3, '(c) Passing shelf')
+fig = plt.figure(figsize=(6, 8))
+ax = plt.axes(projection=ccrs.PlateCarree())
+ax = plot_basic_map(ax, location_info_p)
+ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                   ax=ax, show=False, show_perth_canyon=False,
+                   color='k', linewidths=0.7)
 
-# (d) mean time to get past shelf
-t_release = particles.get_release_time_index()
-p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
-dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+c = ax.pcolormesh(x, y, density, cmap='plasma', vmin=0, vmax=100)
+l, b, w, h = ax.get_position().bounds
+cbax = fig.add_axes([l+w+0.03, b, 0.05, h])
+cbar = plt.colorbar(c, cax=cbax)
+cbar.set_label('Particles making it to deep sea (%)')
+ax.set_title('Export per initial location')
 
-density_time_ds = get_particle_density(grid, particles.lon0[p_ds], particles.lat0[p_ds],
-                                       values=dt_ds)
-density_mean_dt = density_time_ds/density_ds0
-density_mean_dt[density_mean_dt==0.] = np.nan
-
-ax4 = plt.subplot(1, 4, 4, projection=ccrs.PlateCarree())
-ax4 = plot_basic_map(ax4, location_info_p)
-ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-                    ax=ax4, show=False, show_perth_canyon=False,
-                    color='k', linewidths=0.7)
-
-c4 = ax4.pcolormesh(x, y, density_mean_dt, cmap=cmocean.cm.deep, vmin=0, vmax=30)
-ax4.set_yticklabels([])
-l4, b4, w4, h4 = ax4.get_position().bounds
-cbax4 = fig.add_axes([l4+w4+0.01, b4, 0.02, h4])
-cbar4 = plt.colorbar(c4, cax=cbax4)
-cbar4.set_label('Mean time for particles to pass shelf (days)')
-add_subtitle(ax4, '(c) Mean time')
-
-log.info(f'Saving figure to: {output_reefs}')
-plt.savefig(output_reefs, bbox_inches='tight', dpi=300)
+log.info(f'Saving figure to: {output_initial_ds}')
+plt.savefig(output_initial_ds, bbox_inches='tight', dpi=300)
 plt.close()
