@@ -81,10 +81,14 @@ def generate_random_releases_based_on_probability(rng: np.random.default_rng, in
     # random release depending on kelp probability
     random_ints_prob = rng.integers(1, high=100, size=kelp_prob.prob.shape)
     l_prob = random_ints_prob >= kelp_prob.prob
-    # randomly thin releases based on n_thin (to keep number of particles manageable)
-    random_ints = rng.integers(1, high=n_thin+1, size=kelp_prob.prob.shape)
-    l_thin = random_ints == n_thin
-    l_release = np.logical_and(l_prob, l_thin)
+    
+    if n_thin is None or n_thin == 0:
+        l_release = l_prob
+    else:
+        # randomly thin releases based on n_thin (to keep number of particles manageable)
+        random_ints = rng.integers(1, high=n_thin+1, size=kelp_prob.prob.shape)
+        l_thin = random_ints == n_thin
+        l_release = np.logical_and(l_prob, l_thin)
 
     return kelp_prob.lon[l_release], kelp_prob.lat[l_release]
 
