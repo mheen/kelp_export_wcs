@@ -156,6 +156,89 @@ def figure1(show=True, output_path=None):
 
         plt.close()
 
+def figure3(particles:Particles, dx=0.02,
+            cmap='summer',
+            show=True, output_path=None):
+    
+    t_release = particles.get_release_time_index()
+    
+    location_info = get_location_info('cwa_perth_less_contours')
+    grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
+    x, y = np.meshgrid(grid.lon, grid.lat)
+    
+    vmin = 0
+    vmax = 3
+    tick_labels = ['1', '10', '100', '10$^3$']#, '10$^4$', '10$^5$', '10$^6$']
+    fig = plt.figure(figsize=(12, 6))
+    
+    # (a) Bunuru (end of March)
+    l_bunuru = np.array([particles.time[t_release[i]].month == 3 for i in range(len(t_release))])
+    t_bunuru = np.where(np.array([particles.time[i].date()==date(2017, 3, 31) for i in range(len(particles.time))]))[0]
+    lon_bunuru = particles.lon[l_bunuru, :][:, t_bunuru]
+    lat_bunuru = particles.lat[l_bunuru, :][:, t_bunuru]
+    density_bunuru = get_particle_density(grid, lon_bunuru, lat_bunuru)
+    density_bunuru[density_bunuru==0.] = np.nan
+    
+    ax3 = plt.subplot(1, 3, 1, projection=ccrs.PlateCarree())
+    ax3 = plot_basic_map(ax3, location_info)
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
+                        ax=ax3, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    
+    c3 = ax3.pcolormesh(x, y, np.log10(density_bunuru), vmin=vmin, vmax=vmax, cmap=cmap)
+    add_subtitle(ax3, '(a) Bunuru')
+    
+    # (b) Djeran (end of May)
+    l_djeran = np.array([particles.time[t_release[i]].month in [4, 5] for i in range(len(t_release))])
+    t_djeran = np.where(np.array([particles.time[i].date()==date(2017, 5, 31) for i in range(len(particles.time))]))[0]
+    lon_djeran = particles.lon[l_djeran, :][:, t_djeran]
+    lat_djeran = particles.lat[l_djeran, :][:, t_djeran]
+    density_djeran = get_particle_density(grid, lon_djeran, lat_djeran)
+    density_djeran[density_djeran==0.] = np.nan
+    
+    ax1 = plt.subplot(1, 3, 2, projection=ccrs.PlateCarree())
+    ax1 = plot_basic_map(ax1, location_info)
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
+                        ax=ax1, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    
+    c1 = ax1.pcolormesh(x, y, np.log10(density_djeran), vmin=vmin, vmax=vmax, cmap=cmap)
+    add_subtitle(ax1, '(b) Djeran')
+    
+    # (c) Makuru (end of July)
+    l_makuru = np.array([particles.time[t_release[i]].month in [6, 7] for i in range(len(t_release))])
+    t_makuru = np.where(np.array([particles.time[i].date()==date(2017, 7, 31) for i in range(len(particles.time))]))[0]
+    lon_makuru = particles.lon[l_makuru, :][:, t_makuru]
+    lat_makuru = particles.lat[l_makuru, :][:, t_makuru]
+    density_makuru = get_particle_density(grid, lon_makuru, lat_makuru)
+    density_makuru[density_makuru==0.] = np.nan
+    
+    ax2 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
+    ax2 = plot_basic_map(ax2, location_info)
+    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
+                        ax=ax2, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    
+    c2 = ax2.pcolormesh(x, y, np.log10(density_makuru), vmin=vmin, vmax=vmax, cmap=cmap)
+    add_subtitle(ax2, '(b) Makuru')
+    
+    # colorbar
+    l2, b2, w2, h2 = ax2.get_position().bounds
+    cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
+    cbar2 = plt.colorbar(c2, cax=cbax2)
+    cbar2.set_label(f'Particle density (# per {dx}$^o$ grid cell)')
+    cbar2.set_ticks(np.arange(vmin, vmax+1, 1))
+    cbar2.set_ticklabels(tick_labels)
+    
+    if show is True:
+        plt.show()
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+        plt.close()
+
 def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
             colors=[kelp_green, kelp_green, kelp_green, kelp_green, 'k'],
             linestyles=['-', '--', ':', '-.', '--'],
@@ -353,6 +436,8 @@ if __name__ == '__main__':
     particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     particles = Particles.read_from_netcdf(particle_path)
     
-    figure4(particles, output_path='fig4.jpg', show=False)
+    figure3(particles, output_path='fig3.jpg', show=False)
+    
+    # figure4(particles, output_path='fig4.jpg', show=False)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
