@@ -6,11 +6,14 @@ from data.kelp_data import KelpProbability
 from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs, get_subgrid
 from data.roms_data import get_cross_shelf_velocity_component, get_eta_xi_along_depth_contour
 from data.roms_data import get_lon_lat_along_depth_contour, get_distance_along_transect
+from data.glider_data import GliderData
+from data.satellite_data import SatelliteSST, read_satellite_sst_from_netcdf
 from particles import Particles, get_particle_density, DensityGrid
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.general import add_subtitle
 from plot_tools.plots_bathymetry import plot_contours
 from plot_tools.plots_particles import plot_age_in_deep_sea, plot_particle_age_in_deep_sea_depending_on_depth
+from plot_tools.plots_sst import plot_sst
 from location_info import LocationInfo, get_location_info
 from datetime import datetime, date, timedelta
 import matplotlib.pyplot as plt
@@ -147,6 +150,90 @@ def figure1(show=True, output_path=None):
     l4, b4, w4, h4 = ax4.get_position().bounds
     ax4.set_position([l3, b4, w3, h4])
 
+    if show is True:
+        plt.show()
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+        plt.close()
+
+def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
+            vmin_tempg=19.5, vmax_tempg=22.5,
+            cmap_bbp=cmocean.cm.turbid, vmin_bbp=0, vmax_bbp=0.008,
+            show=True, output_path=None):
+    
+    glider_all = GliderData.read_from_netcdf(f'{get_dir_from_json("glider_data")}IMOS_ANFOG_BCEOPSTUV_20220628T064224Z_SL286_FV01_timeseries_END-20220712T082641Z.nc')
+    start_glider = datetime(2022, 6, 30, 22, 30)
+    end_glider = datetime(2022, 7, 2, 15)
+    glider = glider_all.get_data_in_time_frame(start_glider, end_glider)
+    
+    fig = plt.figure(figsize=(12, 8))
+    plt.subplots_adjust(wspace=1.8)
+    
+    # (a) Makuru mean SST
+    sst = read_satellite_sst_from_netcdf(f'{get_dir_from_json("satellite_sst")}gsr_monthly_mean_makuru.nc')
+    
+    location_info = get_location_info('perth_wider')
+    
+    ax1 = plt.subplot(3, 5, (1, 12), projection=ccrs.PlateCarree())
+    ax1 = plot_basic_map(ax1, location_info, ymarkers='right')
+    ax1, c1, cbar1 = plot_sst(sst, location_info, ax=ax1, show=False, cmap=cmap_temp, vmin=vmin_temp, vmax=vmax_temp)
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
+                        ax=ax1, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    ax1.plot(glider.lon, glider.lat, '.k', label='Glider transect')
+    cbar1.remove()
+    ax1.legend(loc='lower left')
+    l1, b1, w1, h1 = ax1.get_position().bounds
+    
+    add_subtitle(ax1, '(a) Makuru mean SST')
+    
+    # (b) July 2022 glider transect temperature
+    depth_ticks = [-150, -100, -50, 0]
+    depth_ticklabels = [150, 100, 50, 0]
+    
+    ax2 = plt.subplot(3, 5, (8, 10))
+    ax2, c2, cbar2 = glider.plot_transect(parameter='temp', ax=ax2, show=False,
+                                          cmap=cmap_temp, vmin=vmin_tempg, vmax=vmax_tempg)
+    ax2.set_yticks(depth_ticks)
+    ax2.set_yticklabels(depth_ticklabels)
+    
+    cbar2.remove()
+    l2, b2, w2, h2 = ax2.get_position().bounds
+    cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
+    cbar2 = plt.colorbar(c2, cax=cbax2)
+    cbar2.set_label('Temperature ($^o$C)')
+    
+    add_subtitle(ax2, f'(b) Glider temperatures: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
+                 location='lower right')
+    
+    # (c) July 2022 glider transect backscatter
+    ax3 = plt.subplot(3, 5, (13, 15))
+    ax3, c3, cbar3 = glider.plot_transect(parameter='bbp', ax=ax3, show=False,
+                                          cmap=cmap_bbp, vmin=vmin_bbp, vmax=vmax_bbp)
+    ax3.set_yticks(depth_ticks)
+    ax3.set_yticklabels(depth_ticklabels)
+    
+    cbar3.remove()
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
+    cbar3 = plt.colorbar(c3, cax=cbax3)
+    cbar3.set_label('Particle backscatter (m$^{-1}$)')
+    
+    add_subtitle(ax3, f'(c) Glider backscatter: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
+                 location='lower right')
+    
+    # move ax1
+    ax1.set_position([l1, b3, w1, h1])
+    
+    # add ax1 colorbar
+    cbax1 = fig.add_axes([l1-0.03, b3, 0.02, h1])
+    cbar1 = plt.colorbar(c1, cax=cbax1)
+    cbar1.set_label('Satellite mean sea surface temperature ($^o$C)', labelpad=-70)
+    cbar1.ax.yaxis.set_ticks_position('left')
+    
     if show is True:
         plt.show()
 
@@ -432,11 +519,13 @@ if __name__ == '__main__':
         save_distance_along_depth_contour()
 
     # figure1(output_path='fig1.jpg')
-
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
-    particles = Particles.read_from_netcdf(particle_path)
     
-    figure3(particles, output_path='fig3.jpg', show=False)
+    figure2(output_path='fig2.jpg', show=False)
+
+    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
+    # particles = Particles.read_from_netcdf(particle_path)
+    
+    # figure3(particles, output_path='fig3.jpg', show=False)
     
     # figure4(particles, output_path='fig4.jpg', show=False)
     

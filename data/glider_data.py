@@ -25,6 +25,7 @@ class GliderData:
                  salt:np.ndarray,
                  ox2:np.ndarray,
                  cphl:np.ndarray,
+                 bbp:np.ndarray,
                  u:np.ndarray,
                  v:np.ndarray):
 
@@ -36,6 +37,7 @@ class GliderData:
         self.salt = salt
         self.ox2 = ox2
         self.cphl = cphl
+        self.bbp = bbp
         self.u = u
         self.v = v
 
@@ -87,9 +89,11 @@ class GliderData:
         l_time = get_l_time_range(self.time, start_time, end_time)
         return GliderData(self.time[l_time], self.lon[l_time], self.lat[l_time],
                           self.depth[l_time], self.temp[l_time], self.salt[l_time],
-                          self.ox2[l_time], self.cphl[l_time], self.u[l_time], self.v[l_time])
+                          self.ox2[l_time], self.cphl[l_time], self.bbp[l_time],
+                          self.u[l_time], self.v[l_time])
 
-    def plot_transect(self, ax=None, show=True, parameter='density'):
+    def plot_transect(self, ax=None, show=True, parameter='density',
+                      cmap='RdBu_r', vmin=None, vmax=None):
         '''Plots full transect based on fitted glider'''
 
         if parameter.lower().startswith('t'):
@@ -107,6 +111,9 @@ class GliderData:
         elif parameter.lower().startswith('c'):
             values = self.cphl
             cbar_label = 'Chlorophyll (mg/m$^3$)'
+        elif parameter.lower().startswith('b'):
+            values = self.bbp
+            cbar_label = 'Particle backscatter (m$^{-1}$)'
         elif parameter.lower().startswith('v'):
             values = np.sqrt(self.u**2+self.v**2)
             cbar_label = 'Velocity (m/s)'
@@ -120,24 +127,33 @@ class GliderData:
             ax = plt.axes()
 
         tt, zz = np.meshgrid(t, z)
+        
+        if all(self.lon[~np.isnan(self.lon)] < 130.): # in WA: so flip transect horizontally to show coast on the east
+            transect_values = np.fliplr(transect_values)
+            z_bottom = np.flip(np.copy(self.z_bottom))
+            x_label = '$\leftarrow$ Distance along transect'
+        else:
+            z_bottom = self.z_bottom
+            x_label = 'Distance along transect $\rightarrow$'
 
-        c = ax.pcolormesh(tt, zz, transect_values, cmap='RdBu_r')
+        c = ax.pcolormesh(tt, zz, transect_values, cmap=cmap, vmin=vmin, vmax=vmax)
         cbar = plt.colorbar(c)
         cbar.set_label(cbar_label)
-        ax.plot(self.cumtime, self.z_bottom, '-k')
-        ax.fill_between(self.cumtime, z[0], self.z_bottom, color='#989898')
+        ax.plot(self.cumtime, z_bottom, '-k')
+        ax.fill_between(self.cumtime, z[0], z_bottom, color='#989898')
         
         ax.set_xlim([0, self.cumtime[-1]])
         ax.set_ylim([z[0], 0])
 
         ax.set_ylabel('Depth (m)')
+        ax.set_xticks([])
         ax.set_xticklabels([])
-        ax.set_xlabel('Distance along transect')
+        ax.set_xlabel(x_label)
 
         if show is True:
             plt.show()
         else:
-            return ax
+            return ax, c, cbar
 
     def plot_track(self, location_info:LocationInfo, ax=None, show=True, show_labels=True, color='k'):
         if ax is None:
@@ -233,6 +249,12 @@ class GliderData:
         cphl_qc = nc['CPHL_quality_control'][:].filled()
         l_cphl = sum([cphl_qc==use_qc_flag for use_qc_flag in use_qc_flags]).astype(bool)
         cphl[~l_cphl] = np.nan
+        
+        # particle backscatter
+        bbp = nc['BBP'][:].filled(fill_value=np.nan)
+        bbp_qc = nc['BBP_quality_control'][:].filled()
+        l_bbp = sum([bbp_qc==use_qc_flag for use_qc_flag in use_qc_flags]).astype(bool)
+        bbp[~l_bbp] = np.nan
 
         # current velocities
         u = nc['UCUR'][:].filled(fill_value=np.nan)
@@ -247,7 +269,7 @@ class GliderData:
 
         nc.close()
 
-        return GliderData(time_datetime, lon, lat, depth, temp, salt, ox2, cphl, u, v)
+        return GliderData(time_datetime, lon, lat, depth, temp, salt, ox2, cphl, bbp, u, v)
 
 if __name__ == '__main__':
     glider_data = GliderData.read_from_netcdf(f'{get_dir_from_json("glider_data")}IMOS_ANFOG_BCEOPSTUV_20220628T064224Z_SL286_FV01_timeseries_END-20220712T082641Z.nc')

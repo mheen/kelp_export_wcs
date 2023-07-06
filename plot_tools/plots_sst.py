@@ -46,7 +46,7 @@ def plot_sst(sst_data:SatelliteSST, location_info:LocationInfo, t=0,
     if show is True:
         plt.show()
     else:
-        return ax
+        return ax, c, cbar
 
 if __name__ == '__main__':
     location_info = get_location_info('gsr')
