@@ -115,13 +115,13 @@ def figure1(show=True, output_path=None):
     # ax3.set_position([l3+0.02, b3+0.05, w3, h3])
 
     # (b) detritus production from de Bettignies et al. (2013)
-    time_detritus = ['Mar-May', 'Jun-Jul', 'Sep-Oct', 'Dec-Feb']
+    time_detritus = ['Mar-May', 'Jun-Aug', 'Sep-Nov', 'Dec-Feb']
     detritus = [4.8, 2.12, 0.70, 0.97]
     detritus_sd = [1.69, 0.84, 0.45, 0.81]
 
     ax2 = plt.subplot(3, 3, 7)
     ax2.bar(np.arange(len(time_detritus)), detritus, color=kelp_green, tick_label=time_detritus, yerr=detritus_sd)
-    ax2.set_ylim([0, 7.5])
+    ax2.set_ylim([0, 8.0])
     ax2.set_ylabel('Detritus production\n(g/kelp/day)')
     add_subtitle(ax2, '(b) Seasonal detritus production')
     l2, b2, w2, h2 = ax2.get_position().bounds
@@ -518,9 +518,9 @@ if __name__ == '__main__':
     if not os.path.exists('temp_data/perth_wide_distance_100m.csv'):
         save_distance_along_depth_contour()
 
-    # figure1(output_path='fig1.jpg')
+    figure1(output_path='fig1.jpg', show=False)
     
-    figure2(output_path='fig2.jpg', show=False)
+    # figure2(output_path='fig2.jpg', show=False)
 
     # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
     # particles = Particles.read_from_netcdf(particle_path)
