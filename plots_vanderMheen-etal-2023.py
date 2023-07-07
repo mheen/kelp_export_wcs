@@ -273,7 +273,7 @@ def figure3(particles:Particles, dx=0.02,
                         color='k', linewidths=0.7)
     
     c3 = ax3.pcolormesh(x, y, np.log10(density_bunuru), vmin=vmin, vmax=vmax, cmap=cmap)
-    add_subtitle(ax3, '(a) Bunuru')
+    add_subtitle(ax3, '(a) Bunuru (end of March)')
     
     # (b) Djeran (end of May)
     l_djeran = np.array([particles.time[t_release[i]].month in [4, 5] for i in range(len(t_release))])
@@ -290,7 +290,7 @@ def figure3(particles:Particles, dx=0.02,
                         color='k', linewidths=0.7)
     
     c1 = ax1.pcolormesh(x, y, np.log10(density_djeran), vmin=vmin, vmax=vmax, cmap=cmap)
-    add_subtitle(ax1, '(b) Djeran')
+    add_subtitle(ax1, '(b) Djeran (end of May)')
     
     # (c) Makuru (end of July)
     l_makuru = np.array([particles.time[t_release[i]].month in [6, 7] for i in range(len(t_release))])
@@ -307,7 +307,7 @@ def figure3(particles:Particles, dx=0.02,
                         color='k', linewidths=0.7)
     
     c2 = ax2.pcolormesh(x, y, np.log10(density_makuru), vmin=vmin, vmax=vmax, cmap=cmap)
-    add_subtitle(ax2, '(b) Makuru')
+    add_subtitle(ax2, '(c) Makuru (end of July)')
     
     # colorbar
     l2, b2, w2, h2 = ax2.get_position().bounds
@@ -384,13 +384,13 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
         plt.close()
 
 def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
-            dx=0.02, vmin=0, vmax=0.2, scale_z=10, cmap='plasma',
+            dx=0.01, vmin=0, vmax=0.2, scale_z=10, cmap='plasma',
             dx_c=0.02, lon_c=115.43,
             int_t=8,
             show=True, output_path=None):
 
-    lon_examples = [115.52, 115.59, 115.32, 115.32, 115.55, 115.63]
-    lat_examples = [-32.25, -32.6, -32.4, -31.8, -31.83, -31.72]
+    lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
+    lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
 
     fig = plt.figure(figsize=(12, 6))
     plt.subplots_adjust(hspace=0.1, wspace=0.4)
@@ -434,6 +434,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
         cbar_label = f'Origin of particles passing shelf break (% x {scale_z})'
     cbar1.set_label(cbar_label)
     add_subtitle(ax1, '(a) Contribution to export')
+    ax1.plot(lon_examples, lat_examples, 'ow', linewidth=5)
     ax1.plot(lon_examples, lat_examples, 'xk')
 
     # (b) map of mean cross-shelf transport in Perth region
@@ -474,12 +475,18 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     l2, b2, w2, h2 = ax2.get_position().bounds
     ax2.set_position([l2+0.02, b2, w2, h2])
 
-    # (c) example particle tracks from different reefs
-    p_ex = []
+    # (c) example particle tracks from different reefs (particle with median time to cross shelf)
+    i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
     lon0 = particles.lon0[p_ds]
     lat0 = particles.lat0[p_ds]
+    p_ex = []
     for i in range(len(lon_examples)):
-        p_ex.append(get_index_closest_point(lon0, lat0, lon_examples[i], lat_examples[i])[0])
+        l_lon = np.logical_and(lon0 >= grid.lon[i_ex[i].astype(int)], lon0 <= grid.lon[i_ex[i].astype(int)+1])
+        l_lat = np.logical_and(lat0 >= grid.lat[j_ex[i].astype(int)], lat0 <= grid.lat[j_ex[i].astype(int)+1])
+        ps_ex = np.where(np.logical_and(l_lon, l_lat))[0]
+        i_sort = np.argsort(dt_ds[ps_ex]) # sort time ascending
+        i_med = i_sort[np.floor(len(ps_ex)/2).astype(int)] # take middle (or halfway when even) value as median
+        p_ex.append(ps_ex[i_med])
     
     location_info_w = get_location_info('perth_wide_south')
     ax4 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
@@ -490,9 +497,11 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     
     lon = particles.lon[p_ds, :]
     lat = particles.lat[p_ds, :]
-    cm = mpl.colormaps['summer']
+    # cm = mpl.colormaps['summer']
+    colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
     for i in range(len(p_ex)):
-        color = cm(i/(len(p_ex)-1))
+        # color = cm(i/(len(p_ex)-1))
+        color = colors[i]
         ax4.plot(lon[p_ex[i], :t_ds[p_ex[i]]], lat[p_ex[i], :t_ds[p_ex[i]]], '-', color=color)
         ax4.plot(lon[p_ex[i], :t_ds[p_ex[i]]:int_t], lat[p_ex[i], :t_ds[p_ex[i]]:int_t], '.', color=color)
         ax4.plot(lon0[p_ex[i]], lat0[p_ex[i]], 'xk')
@@ -518,15 +527,15 @@ if __name__ == '__main__':
     if not os.path.exists('temp_data/perth_wide_distance_100m.csv'):
         save_distance_along_depth_contour()
 
-    figure1(output_path='fig1.jpg', show=False)
+    # figure1(output_path='fig1.jpg', show=False)
     
     # figure2(output_path='fig2.jpg', show=False)
 
-    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarAug2017_baseline.nc'
-    # particles = Particles.read_from_netcdf(particle_path)
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particles = Particles.read_from_netcdf(particle_path)
     
     # figure3(particles, output_path='fig3.jpg', show=False)
     
     # figure4(particles, output_path='fig4.jpg', show=False)
     
-    # figure6(particles, output_path='fig6.jpg', show=False)
+    figure6(particles, output_path='fig6.jpg', show=False)
