@@ -160,6 +160,7 @@ def figure1(show=True, output_path=None):
         plt.close()
 
 def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
+            dz_interp=1, dt_interp=1/60,
             vmin_tempg=19.5, vmax_tempg=22.5,
             cmap_bbp=cmocean.cm.turbid, vmin_bbp=0, vmax_bbp=0.008,
             show=True, output_path=None):
@@ -196,7 +197,8 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
     
     ax2 = plt.subplot(3, 5, (8, 10))
     ax2, c2, cbar2 = glider.plot_transect(parameter='temp', ax=ax2, show=False,
-                                          cmap=cmap_temp, vmin=vmin_tempg, vmax=vmax_tempg)
+                                          cmap=cmap_temp, vmin=vmin_tempg, vmax=vmax_tempg,
+                                          dz_interp=dz_interp, dt_interp=dt_interp)
     ax2.set_yticks(depth_ticks)
     ax2.set_yticklabels(depth_ticklabels)
     
@@ -212,7 +214,8 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
     # (c) July 2022 glider transect backscatter
     ax3 = plt.subplot(3, 5, (13, 15))
     ax3, c3, cbar3 = glider.plot_transect(parameter='bbp', ax=ax3, show=False,
-                                          cmap=cmap_bbp, vmin=vmin_bbp, vmax=vmax_bbp)
+                                          cmap=cmap_bbp, vmin=vmin_bbp, vmax=vmax_bbp,
+                                          dz_interp=dz_interp, dt_interp=dt_interp)
     ax3.set_yticks(depth_ticks)
     ax3.set_yticklabels(depth_ticklabels)
     
@@ -529,13 +532,13 @@ if __name__ == '__main__':
 
     # figure1(output_path='fig1.jpg', show=False)
     
-    # figure2(output_path='fig2.jpg', show=False)
+    figure2(output_path='fig2.jpg', show=False)
 
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    particles = Particles.read_from_netcdf(particle_path)
+    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    # particles = Particles.read_from_netcdf(particle_path)
     
     # figure3(particles, output_path='fig3.jpg', show=False)
     
     # figure4(particles, output_path='fig4.jpg', show=False)
     
-    figure6(particles, output_path='fig6.jpg', show=False)
+    # figure6(particles, output_path='fig6.jpg', show=False)

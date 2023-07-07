@@ -93,7 +93,8 @@ class GliderData:
                           self.u[l_time], self.v[l_time])
 
     def plot_transect(self, ax=None, show=True, parameter='density',
-                      cmap='RdBu_r', vmin=None, vmax=None):
+                      cmap='RdBu_r', vmin=None, vmax=None,
+                      dz_interp=1, dt_interp=1/24):
         '''Plots full transect based on fitted glider'''
 
         if parameter.lower().startswith('t'):
@@ -120,7 +121,7 @@ class GliderData:
         else:
             raise ValueError(f'Unknown parameter requested for transect: {parameter}')
 
-        t, z, transect_values = self.get_transect_data(values)
+        t, z, transect_values = self.get_transect_data(values, dt=dt_interp, dz=dz_interp)
 
         if ax is None:
             fig = plt.figure(figsize=(8, 3))
