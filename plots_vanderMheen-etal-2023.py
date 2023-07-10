@@ -1,6 +1,6 @@
 from tools import log
 from tools.files import get_dir_from_json
-from tools.timeseries import add_month_to_time
+from tools.timeseries import add_month_to_time, convert_datetime_to_time
 from tools.coordinates import get_index_closest_point
 from data.kelp_data import KelpProbability
 from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs, get_subgrid
@@ -334,22 +334,25 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
             linestyles=['-', '--', ':', '-.', '--'],
             show=True, output_path=None):
     
-    fig = plt.figure(figsize=(6, 8))
+    fig = plt.figure(figsize=(11, 6))
     
     xlim = [0, 120]
     
     # (a) age in deep sea for different depths
-    ax1 = plt.subplot(2, 1, 1)
+    ax1 = plt.subplot(1, 2, 1)
     ax1, l1 = plot_particle_age_in_deep_sea_depending_on_depth(particles, h_deep_sea_sensitivity=h_deep_seas,
                                                                linestyles=linestyles,
                                                                colors=colors,
                                                                ax=ax1, show=False)
     ax1.set_ylabel('Particles past depth range (%)')
     ax1.set_xlim(xlim)
+    ax1.set_ylim([0, 70])
     add_subtitle(ax1, '(a) Particle export')
     
-    # (b) age in deep sea with composition
-    ax2 = plt.subplot(2, 1, 2)
+    l1.remove()
+    
+    # (b) age in deep sea with decomposition
+    ax2 = plt.subplot(1, 2, 2)
     
     for i, h_deep_sea in enumerate(h_deep_seas):
         _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
@@ -375,7 +378,89 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
     ax2.grid(True, linestyle='--', alpha=0.5)
     add_subtitle(ax2, '(b) Decomposed particle export')
     
-    # l2 = ax2.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
+    l2 = ax2.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
+    
+    if show is True:
+        plt.show()
+
+    if output_path is not None:
+        log.info(f'Saving figure to: {output_path}')
+        plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+        plt.close()
+
+def figure5(particles:Particles, h_deep_sea=200,
+            show=True, output_path=None):
+    
+    fig = plt.figure(figsize=(8, 8))
+    plt.subplots_adjust(hspace=0.3)
+    
+    # (a) histogram particles passing shelf
+    t_release = particles.get_release_time_index()
+    p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+    
+    times_release = particles.time[t_release]
+    times_ds = particles.time[t_ds]
+    time_bins = []
+    for n in range(particles.time[-1].month-particles.time[0].month+2):
+        time_bins.append(add_month_to_time(particles.time[0], n))
+    n_ds_month, _ = np.histogram(times_ds, bins=time_bins)
+    n_releases, _ = np.histogram(times_release, bins=time_bins)
+    
+    total_particles = particles.lon.shape[0]
+    n_ds_month_norm = n_ds_month/total_particles*100
+    n_releases_norm = n_releases/total_particles*100
+    
+    center_bins = np.array(time_bins[:-1]+np.diff(np.array(time_bins))/2)
+    tick_labels = [center_bin.strftime("%b") for center_bin in center_bins]
+    width = 0.8*np.array([dt.days for dt in np.diff(np.array(time_bins))])
+    
+    ax1 = plt.subplot(2, 2, 1)
+    ax1.bar(center_bins, n_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
+    ax1.plot(center_bins, n_releases_norm, 'xk', label='Particles released')
+    ax1.set_ylabel('Particles passing shelf edge (%)')
+    ax1.set_ylim([0, 27])
+    add_subtitle(ax1, '(a) Particle export per month')
+    l1 = ax1.legend(loc='upper left', bbox_to_anchor=(0.0, -0.08))
+    
+    # (b) histogram decomposed particles passing shelf
+    dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+    f_ds = np.exp(k*dt_ds)
+    times_ds_int, _ = convert_datetime_to_time(times_ds)
+    time_bins_int, _ = convert_datetime_to_time(time_bins)
+    i_bins = np.digitize(times_ds_int, bins=time_bins_int)
+    
+    f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(1, 8)])
+    f_ds_month_norm = f_ds_month/total_particles*100
+    
+    ax2 = plt.subplot(2, 2, 2)
+    ax2.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
+    ax2.set_ylabel('Particles passing shelf edge\naccounting for decomposition (%)')
+    ax2.set_ylim([0, 27])
+    ax2.yaxis.set_label_position("right")
+    ax2.yaxis.tick_right()
+    add_subtitle(ax2, '(b) Decomposed export per month')
+    
+    # (c) histogram cross-shelf export
+    csv_ucross = 'temp_data/perth_wide_monthly_mean_u_cross_100m.csv'
+    if not os.path.exists(csv_ucross):
+        raise ValueError(f'''Mean cross-shelf velocity file does not yet exist: {csv_ucross}
+                         Please create is first by running save_bottom_cross_shelf_velocities''')
+    df = pd.read_csv(csv_ucross)
+    time_cross = [datetime.strptime(d, '%Y-%m-%d') for d in df.columns.values][2:9]
+    str_time_cross = [d.strftime('%b') for d in time_cross]
+    ucross = [np.nanmean(df.iloc[:, i].values) for i in range(len(df.columns))][2:9]
+
+    ax3 = plt.subplot(2, 2, 3)
+    ax3.bar(np.arange(len(time_cross)), ucross, color=ocean_blue, tick_label=str_time_cross)
+    xlim = ax3.get_xlim()
+    ax3.plot([-1, 12], [0, 0], '-k')
+    ax3.set_xlim(xlim)
+    ax3.set_ylim([-0.02, 0.05])
+    ax3.set_ylabel('Offshore transport (m/s)')
+    # ax3.yaxis.set_label_position("right")
+    # ax3.yaxis.tick_right()
+    add_subtitle(ax3, '(c) Monthly mean offshore transport')
     
     if show is True:
         plt.show()
@@ -532,13 +617,15 @@ if __name__ == '__main__':
 
     # figure1(output_path='fig1.jpg', show=False)
     
-    figure2(output_path='fig2.jpg', show=False)
+    # figure2(output_path='fig2.jpg', show=False)
 
-    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    # particles = Particles.read_from_netcdf(particle_path)
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particles = Particles.read_from_netcdf(particle_path)
     
     # figure3(particles, output_path='fig3.jpg', show=False)
     
     # figure4(particles, output_path='fig4.jpg', show=False)
+    
+    figure5(particles)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
