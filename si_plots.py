@@ -171,12 +171,12 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # ---------------------------------------------------------------------------------
 # PARTICLES
 # ---------------------------------------------------------------------------------
-# input_path_p_baseline = f'{pts_dir}cwa_perth_MarAug2017_baseline.nc'
-# input_path_p_threshold = f'{pts_dir}sensitivity/cwa_perth_MarAug2017_thresholdvel.nc'
-# input_path_p_logarithmic = f'{pts_dir}sensitivity/cwa_perth_MarAug2017_logarithmicvel.nc'
-# p_baseline = Particles.read_from_netcdf(input_path_p_baseline)
-# p_threshold = Particles.read_from_netcdf(input_path_p_threshold)
-# p_logarithmic = Particles.read_from_netcdf(input_path_p_logarithmic)
+input_path_p_baseline = f'{pts_dir}cwa_perth_MarSep2017_baseline.nc'
+input_path_p_threshold = f'{pts_dir}sensitivity/cwa_perth_MarSep2017_thresholdvel.nc'
+input_path_p_logarithmic = f'{pts_dir}sensitivity/cwa_perth_MarSep2017_logarithmicvel.nc'
+p_baseline = Particles.read_from_netcdf(input_path_p_baseline)
+p_threshold = Particles.read_from_netcdf(input_path_p_threshold)
+p_logarithmic = Particles.read_from_netcdf(input_path_p_logarithmic)
 
 # --- Particle density comparison ---
 def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:DensityGrid,
@@ -225,38 +225,38 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
     plt.savefig(output_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-# dx = 0.05
-# h_deep_sea = 200 # m
+dx = 0.05
+h_deep_sea = 200 # m
 
-# pd_grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
-# density_baseline = get_particle_density(pd_grid, p_baseline.lon, p_baseline.lat)
-# density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
-# density_logarithmic = get_particle_density(pd_grid, p_logarithmic.lon, p_logarithmic.lat)
+pd_grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
+density_baseline = get_particle_density(pd_grid, p_baseline.lon, p_baseline.lat)
+density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
+density_logarithmic = get_particle_density(pd_grid, p_logarithmic.lon, p_logarithmic.lat)
 
-# output_pd_log_comparison = f'{plots_dir}figs6.jpg'
-# plot_particle_density_comparison(density_baseline, density_logarithmic, pd_grid,
-#                                  p_baseline, p_logarithmic, h_deep_sea,
-#                                  location_info, 'Baseline Mar-Aug 2017', 'Logarithmic vel. Mar-Aug 2017',
-#                                  output_pd_log_comparison)
+output_pd_log_comparison = f'{plots_dir}figs6.jpg'
+plot_particle_density_comparison(density_baseline, density_logarithmic, pd_grid,
+                                 p_baseline, p_logarithmic, h_deep_sea,
+                                 location_info, 'Baseline Mar-Aug 2017', 'Logarithmic vel. Mar-Aug 2017',
+                                 output_pd_log_comparison)
 
-# output_pd_thres_comparison = f'{plots_dir}figs8.jpg'
-# plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
-#                                  p_baseline, p_threshold, h_deep_sea,
-#                                  location_info, 'Baseline Mar-Aug 2017', 'Threshold vel. Mar-Aug 2017',
-#                                  output_pd_thres_comparison)
+output_pd_thres_comparison = f'{plots_dir}figs8.jpg'
+plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
+                                 p_baseline, p_threshold, h_deep_sea,
+                                 location_info, 'Baseline Mar-Aug 2017', 'Threshold vel. Mar-Aug 2017',
+                                 output_pd_thres_comparison)
 
 # ---------------------------------------------------------------------------------
 # REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
 # ---------------------------------------------------------------------------------
-h_deep_sea = 200
-dx = 0.01
-location_info_p = get_location_info('perth')
+# h_deep_sea = 200
+# dx = 0.01
+# location_info_p = get_location_info('perth')
 
-grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
-x, y = np.meshgrid(grid.lon, grid.lat)
+# grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
+# x, y = np.meshgrid(grid.lon, grid.lat)
 
-particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-particles = Particles.read_from_netcdf(particle_path)
+# particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+# particles = Particles.read_from_netcdf(particle_path)
 
 # --- Components that make up Figure 6A ---
 # output_reefs = 'figs9.jpg'
@@ -377,81 +377,81 @@ particles = Particles.read_from_netcdf(particle_path)
 # plt.savefig(output_initial_ds, bbox_inches='tight', dpi=300)
 # plt.close()
 
-# --- Minimum and maximum example trajectories ---
-output_tracks = 'figs11.jpg'
+# # --- Minimum and maximum example trajectories ---
+# output_tracks = 'figs11.jpg'
 
-t_release = particles.get_release_time_index()
-p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
-dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+# t_release = particles.get_release_time_index()
+# p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+# dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
 
-lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
-lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
+# lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
+# lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
 
-i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
-lon0 = particles.lon0[p_ds]
-lat0 = particles.lat0[p_ds]
-p_ex_min = []
-p_ex_max = []
-for i in range(len(lon_examples)):
-    l_lon = np.logical_and(lon0 >= grid.lon[i_ex[i].astype(int)], lon0 <= grid.lon[i_ex[i].astype(int)+1])
-    l_lat = np.logical_and(lat0 >= grid.lat[j_ex[i].astype(int)], lat0 <= grid.lat[j_ex[i].astype(int)+1])
-    ps_ex = np.where(np.logical_and(l_lon, l_lat))[0]
-    i_sort = np.argsort(dt_ds[ps_ex]) # sort time ascending
-    i_min = i_sort[0]
-    i_max = i_sort[-1]
-    p_ex_min.append(ps_ex[i_min])
-    p_ex_max.append(ps_ex[i_max])
+# i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
+# lon0 = particles.lon0[p_ds]
+# lat0 = particles.lat0[p_ds]
+# p_ex_min = []
+# p_ex_max = []
+# for i in range(len(lon_examples)):
+#     l_lon = np.logical_and(lon0 >= grid.lon[i_ex[i].astype(int)], lon0 <= grid.lon[i_ex[i].astype(int)+1])
+#     l_lat = np.logical_and(lat0 >= grid.lat[j_ex[i].astype(int)], lat0 <= grid.lat[j_ex[i].astype(int)+1])
+#     ps_ex = np.where(np.logical_and(l_lon, l_lat))[0]
+#     i_sort = np.argsort(dt_ds[ps_ex]) # sort time ascending
+#     i_min = i_sort[0]
+#     i_max = i_sort[-1]
+#     p_ex_min.append(ps_ex[i_min])
+#     p_ex_max.append(ps_ex[i_max])
 
-int_t = 8 # plots daily dots on tracks
+# int_t = 8 # plots daily dots on tracks
 
-fig = plt.figure(figsize=(8, 6))
-plt.subplots_adjust(wspace=0.1)
+# fig = plt.figure(figsize=(8, 6))
+# plt.subplots_adjust(wspace=0.1)
 
-location_info_w = get_location_info('perth_wide_south')
+# location_info_w = get_location_info('perth_wide_south')
 
-# (a) Minimum example tracks
-ax1 = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
-ax1 = plot_basic_map(ax1, location_info_w)
-ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
-                    ax=ax1, show=False, show_perth_canyon=False,
-                    color='k', linewidths=0.7)
+# # (a) Minimum example tracks
+# ax1 = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
+# ax1 = plot_basic_map(ax1, location_info_w)
+# ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
+#                     ax=ax1, show=False, show_perth_canyon=False,
+#                     color='k', linewidths=0.7)
 
-lon = particles.lon[p_ds, :]
-lat = particles.lat[p_ds, :]
-# cm = mpl.colormaps['summer']
-colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
-for i in range(len(p_ex_min)):
-    # color = cm(i/(len(p_ex)-1))
-    color = colors[i]
-    ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]], lat[p_ex_min[i], :t_ds[p_ex_min[i]]], '-', color=color)
-    ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], lat[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], '.', color=color)
-    ax1.plot(lon0[p_ex_min[i]], lat0[p_ex_min[i]], 'xk')
-    ax1.plot(lon[p_ex_min[i], t_ds[p_ex_min[i]]], lat[p_ex_min[i], t_ds[p_ex_min[i]]], 'ok')
+# lon = particles.lon[p_ds, :]
+# lat = particles.lat[p_ds, :]
+# # cm = mpl.colormaps['summer']
+# colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
+# for i in range(len(p_ex_min)):
+#     # color = cm(i/(len(p_ex)-1))
+#     color = colors[i]
+#     ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]], lat[p_ex_min[i], :t_ds[p_ex_min[i]]], '-', color=color)
+#     ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], lat[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], '.', color=color)
+#     ax1.plot(lon0[p_ex_min[i]], lat0[p_ex_min[i]], 'xk')
+#     ax1.plot(lon[p_ex_min[i], t_ds[p_ex_min[i]]], lat[p_ex_min[i], t_ds[p_ex_min[i]]], 'ok')
     
-add_subtitle(ax1, '(a) Shortest particle trajectories')
+# add_subtitle(ax1, '(a) Shortest particle trajectories')
 
-# (b) Maximum example tracks
-ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
-ax2 = plot_basic_map(ax2, location_info_w)
-ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
-                    ax=ax2, show=False, show_perth_canyon=False,
-                    color='k', linewidths=0.7)
-ax2.set_yticklabels([])
+# # (b) Maximum example tracks
+# ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
+# ax2 = plot_basic_map(ax2, location_info_w)
+# ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
+#                     ax=ax2, show=False, show_perth_canyon=False,
+#                     color='k', linewidths=0.7)
+# ax2.set_yticklabels([])
 
-lon = particles.lon[p_ds, :]
-lat = particles.lat[p_ds, :]
-# cm = mpl.colormaps['summer']
-colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
-for i in range(len(p_ex_max)):
-    # color = cm(i/(len(p_ex)-1))
-    color = colors[i]
-    ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]], lat[p_ex_max[i], :t_ds[p_ex_max[i]]], '-', color=color)
-    ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], lat[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], '.', color=color)
-    ax2.plot(lon0[p_ex_max[i]], lat0[p_ex_max[i]], 'xk')
-    ax2.plot(lon[p_ex_max[i], t_ds[p_ex_max[i]]], lat[p_ex_max[i], t_ds[p_ex_max[i]]], 'ok')
+# lon = particles.lon[p_ds, :]
+# lat = particles.lat[p_ds, :]
+# # cm = mpl.colormaps['summer']
+# colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
+# for i in range(len(p_ex_max)):
+#     # color = cm(i/(len(p_ex)-1))
+#     color = colors[i]
+#     ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]], lat[p_ex_max[i], :t_ds[p_ex_max[i]]], '-', color=color)
+#     ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], lat[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], '.', color=color)
+#     ax2.plot(lon0[p_ex_max[i]], lat0[p_ex_max[i]], 'xk')
+#     ax2.plot(lon[p_ex_max[i], t_ds[p_ex_max[i]]], lat[p_ex_max[i], t_ds[p_ex_max[i]]], 'ok')
     
-add_subtitle(ax2, '(b) Longest particle trajectories')
+# add_subtitle(ax2, '(b) Longest particle trajectories')
 
-log.info(f'Saving figure to: {output_tracks}')
-plt.savefig(output_tracks, bbox_inches='tight', dpi=300)
-plt.close()
+# log.info(f'Saving figure to: {output_tracks}')
+# plt.savefig(output_tracks, bbox_inches='tight', dpi=300)
+# plt.close()
