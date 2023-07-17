@@ -462,6 +462,35 @@ def figure5(particles:Particles, h_deep_sea=200,
     # ax3.yaxis.tick_right()
     add_subtitle(ax3, '(c) Monthly mean offshore transport')
     
+    # (d) histogram dswc occurrence
+    csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
+    if not os.path.exists(csv_dswc):
+        raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
+                         Please create is first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
+    df = pd.read_csv(csv_dswc)
+    time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
+    f_dswc = df['f_dswc'].values
+    l_dswc = f_dswc >= 0.1
+    
+    month_dswc = []
+    p_dswc = []
+    for n in range(time_dswc[0].month, time_dswc[-1].month):
+        l_time = [t.month == n for t in time_dswc]
+        month_dswc.append(datetime(time_dswc[0].year, n, 1))
+        p_dswc.append(np.sum(l_dswc[l_time])/np.sum(l_time))
+    
+    p_dswc = np.array(p_dswc)
+    month_dswc = np.array(month_dswc)
+    str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
+        
+    ax4 = plt.subplot(2, 2, 4)
+    ax4.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
+    ax4.set_ylabel('Dense shelf water outflows\n(% of time)')
+    ax4.yaxis.set_label_position("right")
+    ax4.yaxis.tick_right()
+    ax4.set_ylim([0, 100])
+    add_subtitle(ax4, '(d) Dense shelf water outflows')
+    
     if show is True:
         plt.show()
 
@@ -615,17 +644,19 @@ if __name__ == '__main__':
     if not os.path.exists('temp_data/perth_wide_distance_100m.csv'):
         save_distance_along_depth_contour()
 
-    # figure1(output_path='fig1.jpg', show=False)
+    plot_dir = get_dir_from_json("plots")
+
+    # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
-    # figure2(output_path='fig2.jpg', show=False)
+    # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
     particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
     particles = Particles.read_from_netcdf(particle_path)
     
-    # figure3(particles, output_path='fig3.jpg', show=False)
+    # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
-    # figure4(particles, output_path='fig4.jpg', show=False)
+    # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
     
-    figure5(particles)
+    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
