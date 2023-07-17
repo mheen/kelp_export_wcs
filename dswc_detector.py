@@ -1,79 +1,199 @@
 from data.roms_data import RomsData, RomsGrid, read_roms_data_from_multiple_netcdfs, read_roms_grid_from_netcdf
-from data.roms_data import get_eta_xi_along_transect, get_distance_along_transect
-from data.roms_data import TransectData, get_transect_data
 from data.wind_data import WindData, read_era5_wind_data_from_netcdf
-from particles import Particles
 from plot_tools.plot_cycler import plot_cycler
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
 from tools import log
 from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.files import get_dir_from_json
-from tools.coordinates import get_distance_between_points
 from location_info import LocationInfo, get_location_info
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-from matplotlib.collections import PatchCollection
 from matplotlib.colors import ListedColormap
 import matplotlib.dates as mdates
 import matplotlib.units as munits
 import cartopy.crs as ccrs
 import numpy as np
 from datetime import datetime, date, timedelta
-from dataclasses import dataclass
 import json
 import warnings
+import pandas as pd
 from scipy.interpolate import interp1d
 
-converter = mdates.ConciseDateConverter()
-munits.registry[np.datetime64] = converter
-munits.registry[date] = converter
-munits.registry[datetime] = converter
+# bottom is at depth=0, surface is at depth=-1
+depth_limit = 50 # m
 
-locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
-formatter = mdates.ConciseDateFormatter(locator)
-
-roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
-transect_file = 'input/transects_dswc_detection.json' # transects in this file need to be ordered correctly!
-
-def get_transects_from_json(transect_file:str) -> list:
-    with open(transect_file, 'r') as f:
-        all_transects = json.load(f)
-    return all_transects
-
-def plot_transects_on_map(roms_grid:RomsGrid, location_info:LocationInfo,
-                          transect_file:str, show=True):
-    ax = plt.axes(projection=ccrs.PlateCarree())
-    ax = plot_basic_map(ax, location_info)
-    ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax, show=False, show_perth_canyon=False, color='#757575')
-    c = ax.pcolormesh(roms_grid.lon, roms_grid.lat, roms_grid.h, cmap='viridis', vmin=0, vmax=400)
-    cbar = plt.colorbar(c)
-    cbar.set_label('Bathymetry (m)')
-
-    transects = get_transects_from_json(transect_file)
-    for transect in transects:
-        eta, xi = get_eta_xi_along_transect(roms_grid, transect['lon1'], transect['lat1'],
-                                            transect['lon2'], transect['lat2'], transect['ds'])
-        lon = roms_grid.lon[eta, xi]
-        lat = roms_grid.lat[eta, xi]
-        ax.plot(lon, lat, '-', color='k')
-
-    if show is True:
-        plt.show()
-    else:
-        return ax
-
-def plot_cycling_roms_transect(transect_data:TransectData, parameter:str, l_dswc=None,
-                               t_interval=1, vmin=24.8, vmax=25.6, cmap='RdYlBu_r'):
+def exclude_roms_data_past_depth(roms_data:RomsData, depth_limit=depth_limit) -> RomsData:
+    l_too_deep = roms_data.grid.h > depth_limit
+    roms_data.temp[:, :, l_too_deep] = np.nan
+    roms_data.density[:, :, l_too_deep] = np.nan
+    roms_data.salt[:, :, l_too_deep] = np.nan
+    roms_data.sigma_t[:, :, l_too_deep] = np.nan
+    roms_data.u_east[:, :, l_too_deep] = np.nan
+    roms_data.v_north[:, :, l_too_deep] = np.nan
+    roms_data.grid.h[l_too_deep] = np.nan
     
-    if hasattr(transect_data, parameter):
-        values = getattr(transect_data, parameter)
+    return roms_data
+
+def calculate_mean_density(roms_data:RomsData) -> np.ndarray:
+    delta_z = np.diff(roms_data.grid.z_w, axis=0)
+    mean_density = np.sum(roms_data.density*delta_z, axis=1)/roms_data.grid.h
+    return mean_density
+
+def calculate_potential_energy_anomaly(roms_data:RomsData) -> np.ndarray:
+    mean_density = calculate_mean_density(roms_data)
+    g = 9.81 # m/s2
+    delta_z = np.diff(roms_data.grid.z_w, axis=0)
+    phi = g/roms_data.grid.h*np.sum((np.repeat(mean_density[:, np.newaxis, :, :], roms_data.density.shape[1], axis=1)-roms_data.density)*roms_data.grid.z*delta_z, axis=1)
+    return phi
+
+def calculate_potential_energy_anomaly_per_latitude(roms_data:RomsData) -> np.ndarray:
+    phi = calculate_potential_energy_anomaly(roms_data)
+    mean_phi = np.nanmean(phi, axis=2)
+    return mean_phi
+
+def calculate_density_gradient_per_latitude(roms_data:RomsData) -> np.ndarray:
+    depth_mean_density = calculate_mean_density(roms_data)
+    drho = np.diff(depth_mean_density, axis=2)
+    dx = -1/roms_data.grid.pm[:, :-1] # m - negative sign because moving away from the coast in westwards direction (doesn't apply for other coastlines!)
+    drho_dlon = drho/dx
+    mean_density_gradient = np.nanmean(drho_dlon, axis=2)
+    return mean_density_gradient
+
+# --- numbers that indicate conditions for dswc ---
+def calculate_horizontal_richardson_number(roms_data:RomsData, wind_data:WindData) -> float:
+    '''Calculates the horizontal Richardson number (or Simpson number) as specified by
+    Mahjabin et al. (2020, Scientific Reports).
+    Note: Tanziha gets Richardson numbers on the order of 1.'''
+    
+    g = 9.81 # gravitational acceleration (m/s^2)
+    rho_w = 1025 # sea water density (kg/m^3): using a standard value for this, but could also use a mean value from roms
+    rho_a = 1.2 # air density (kg/m^3)
+    mean_h = np.nanmean(roms_data.grid.h)
+    drhodx = calculate_density_gradient_per_latitude(roms_data)
+    mean_drhodx = np.nanmean(drhodx)
+        
+    mean_w = np.nanmean(wind_data.vel)
+    ks = 0.03*(0.63+0.066*mean_w**(1/3))/1000 # surface drag coefficient according to Pugh (1987)
+    u = np.sqrt(ks*rho_a/rho_w)*mean_w
+
+    Ri = g/rho_w*mean_h**2/u**2*mean_drhodx # still factor 100 too large and negative (although that seems logical if drhodx is negative)
+    
+    return Ri
+
+def write_horizontal_richardson_number_to_csv(start_date:datetime, end_date:datetime,
+                                              roms_dir:str, era5_dir:str, location_info:LocationInfo,
+                                              output_path:str):
+    
+    n_days = (end_date-start_date).days+1
+    time = []
+    Ri = []
+    for n in range(n_days):
+        load_day = start_date+timedelta(days=n)
+        roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, load_day, load_day,
+                                                         lon_range=location_info.lon_range,
+                                                         lat_range=location_info.lat_range)
+        roms_data = exclude_roms_data_past_depth(roms_data)
+        wind_data = read_era5_wind_data_from_netcdf(era5_dir, load_day, load_day,
+                                                    lon_range=location_info.lon_range,
+                                                    lat_range=location_info.lat_range)
+        
+        Ri.append(calculate_horizontal_richardson_number(roms_data, wind_data))
+        time.append(load_day)
+        
+    time = np.array(time).flatten()
+    Ri = np.array(Ri).flatten()
+    df = pd.DataFrame(np.array([time, Ri]).transpose(), columns=['time', 'Ri'])
+    log.info(f'Writing horizontal Richardson number timeseries to: {output_path}')
+    df.to_csv(output_path, index=False)
+
+def calculate_gravitational_versus_wind_components(roms_data:RomsData,
+                                             wind_data:WindData) -> tuple[float, float]:
+    '''Based on Hetzel et al. (2013, Continental Shelf Research). Also used in Mahjabin et al. (2020, SR).
+    Note: Yasha gets wind and gravitational components on the order of 10**-7 [J m-3 s-1].'''
+    g = 9.81
+    rho_w = 1025
+    rho_a = 1.2
+    delta = 3*10**-3
+    K_mz = 1*10**-2
+    mean_h = np.nanmean(roms_data.grid.h)
+
+    drhodx = calculate_density_gradient_per_latitude(roms_data)
+    mean_drhodx = np.nanmean(drhodx)
+    grav_component = 1/320*g**2*mean_h**4/(rho_w*K_mz)*mean_drhodx**2
+    
+    mean_w = np.nanmean(wind_data.vel)
+    ks = 0.03*(0.63+0.066*mean_w**(1/3))/1000 # surface drag coefficient according to Pugh (1987)
+    wind_component = delta*ks*rho_a*mean_w**3/mean_h
+    
+    return grav_component, wind_component
+
+def write_gravitation_wind_components_to_csv(start_date:datetime, end_date:datetime,
+                                             roms_dir:str, era5_dir:str, location_info:LocationInfo,
+                                             output_path:str):
+    
+    n_days = (end_date-start_date).days+1
+    time = []
+    grav_c = []
+    wind_c = []
+    for n in range(n_days):
+        load_day = start_date+timedelta(days=n)
+        roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, load_day, load_day,
+                                                         lon_range=location_info.lon_range,
+                                                         lat_range=location_info.lat_range)
+        roms_data = exclude_roms_data_past_depth(roms_data)
+        wind_data = read_era5_wind_data_from_netcdf(era5_dir, load_day, load_day,
+                                                    lon_range=location_info.lon_range,
+                                                    lat_range=location_info.lat_range)
+        
+        time.append(load_day)
+        g, w = calculate_gravitational_versus_wind_components(roms_data, wind_data)
+        grav_c.append(g)
+        wind_c.append(w)
+        
+    time = np.array(time).flatten()
+    grav_c = np.array(grav_c).flatten()
+    wind_c = np.array(wind_c).flatten()
+    df = pd.DataFrame(np.array([time, grav_c, wind_c]).transpose(), columns=['time', 'grav_component', 'wind_component'])
+    log.info(f'Writing gravitational and wind component timeseries to: {output_path}')
+    df.to_csv(output_path, index=False)
+
+# --- detection ---
+def find_dswc_per_latitude(roms_data:RomsData) -> np.ndarray[bool]:
+    
+    temp_diff_surface_bottom = 0.5 # positive for colder water at bottom
+    
+    dpdx = calculate_density_gradient_per_latitude(roms_data)
+    phi = calculate_potential_energy_anomaly_per_latitude(roms_data)
+    
+    l_prereq = np.logical_and(dpdx < 0, phi > 1)
+    
+    l_temp_s_b = roms_data.temp[:, -1, :, :] - roms_data.temp[:, 0, :, :] > temp_diff_surface_bottom
+    
+    l_dswc = np.zeros((len(roms_data.time), roms_data.grid.lat.shape[0], roms_data.grid.lon.shape[1])).astype(bool)
+    for t in range(len(roms_data.time)):
+        for i in range(roms_data.grid.lon.shape[1]):
+            if l_prereq[t, i] == True:
+                l_dswc[t, i, :] = l_temp_s_b[t, i, :]
+    
+    return l_dswc
+
+def plot_cycling_transect(roms_data:RomsData, parameter='temp', l_dswc=None,
+                          i_lat=25,
+                          t_interval=1, vmin=20., vmax=22., cmap='RdYlBu_r'):
+    
+    if hasattr(roms_data, parameter):
+        values = getattr(roms_data, parameter)
+        values = values[:, :, i_lat, :]
     else:
         raise ValueError(f'Unknown parameter requested.')
 
+    lon = roms_data.grid.lon[i_lat, :]
+    z = roms_data.grid.z[:, i_lat, :]
+    h = roms_data.grid.h[i_lat, :]
+
     def single_plot(fig, req_time):
         t = get_closest_time_index(roms_data.time, req_time)
-        title = transect_data.time[t].strftime('%d-%m-%Y %H:%M')
+        title = roms_data.time[t].strftime('%d-%m-%Y %H:%M')
 
         if len(values.shape) == 3:
             v = values[t, :, :]
@@ -81,67 +201,94 @@ def plot_cycling_roms_transect(transect_data:TransectData, parameter:str, l_dswc
             raise ValueError(f'Requested parameter does not have a depth component.')
 
         ax = plt.axes()
-        c = ax.pcolormesh(transect_data.distance, transect_data.z, v, cmap=cmap, vmin=vmin, vmax=vmax, shading='nearest')
-        ax.fill_between(transect_data.distance[0, :], -transect_data.h, np.nanmin(transect_data.z), edgecolor='k', facecolor='#989898') # ROMS bottom
+        c = ax.pcolormesh(lon, z, v, cmap=cmap, vmin=vmin, vmax=vmax, shading='nearest')
+        ax.fill_between(lon, -h, np.nanmin(z), edgecolor='k', facecolor='#989898') # ROMS bottom
 
         if l_dswc is not None:
-            ax.plot(transect_data.distance[0, :], l_dswc[t, :]*transect_data.h-transect_data.h, '-k', linewidth=5)
+            ax.plot(lon, l_dswc[t, i_lat, :]*h-h, '-k', linewidth=5)
         
-        ax.quiver(transect_data.distance, transect_data.z, transect_data.u_down[t, :],
-                  np.zeros(transect_data.u_down[0, :].shape), scale=5, color='k')
-
-        ax.set_xlabel('Distance along transect (km)')
-        ax.set_xlim([0, np.nanmax(transect_data.distance)])
         ax.set_ylabel('Depth (m)')
-        ax.set_ylim([np.nanmin(transect_data.z), 0])
+        ax.set_ylim([np.nanmin(z), 0])
         
         cbar = plt.colorbar(c)
         cbar.set_label(parameter)
 
         ax.set_title(title)
     
-    t = np.arange(0, len(transect_data.time), t_interval)
-    time = transect_data.time[t]
+    t = np.arange(0, len(roms_data.time), t_interval)
+    time = roms_data.time[t]
 
     fig = plot_cycler(single_plot, time)
-    plt.show()  
+    plt.show()
 
-def plot_cycling_roms_map(roms_data:RomsData, parameter:str, s:int,
-                          location_info:LocationInfo, t_interval=1,
-                          vmin=24.8, vmax=25.6, cmap='RdYlBu_r',
-                          dswc_polygons=None, l_dswc=None):
+def plot_cycling_map(roms_data:RomsData, l_dswc=None,
+                     parameter='temp', t_interval=1,
+                     location_info=get_location_info('perth'),
+                     vmin=20., vmax=22., cmap='RdYlBu_r'):
+    # for parameter='sigma_t': vmin=24.8, vmax=25.6
+    # for parameter='salt': vmin=35.5, vmax=35.9 (in summer at least)
     
     if hasattr(roms_data, parameter):
         values = getattr(roms_data, parameter)
         if len(values.shape) == 4:
-            values = values[:, s, :, :]
+            values_b = values[:, 0, :, :]
+            values_s = values[:, -1, :, :]
     
     def single_plot(fig, req_time):
         t = get_closest_time_index(roms_data.time, req_time)
-        z = values[t, :, :]
-        title = roms_data.time[t].strftime('%d-%m-%Y %H:%M')
-        ax = plt.axes(projection=ccrs.PlateCarree())
+        
+        z_b = values_b[t, :, :]
+        z_s = values_s[t, :, :]
+        
+        time_str = roms_data.time[t].strftime('%d-%m-%Y %H:%M')
+        
+        n_thin = 2
+        lon = roms_data.grid.lon[::n_thin, ::n_thin]
+        lat = roms_data.grid.lat[::n_thin, ::n_thin]
+        
+        # --- Bottom ---
+        # colormap parameter
+        title = f'Bottom: {time_str}'
+        ax = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
         ax = plot_basic_map(ax, location_info)
         ax.set_title(title)
-        c = ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, z,
+        c = ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, z_b,
                           cmap=cmap, vmin=vmin, vmax=vmax, shading='nearest')
-        cbar = plt.colorbar(c)
-        cbar.set_label(parameter)
 
+        # velocities
+        u_b = roms_data.u_east[t, 0, ::n_thin, ::n_thin]
+        v_b = roms_data.v_north[t, 0, ::n_thin, ::n_thin]
+        ax.quiver(lon, lat, u_b, v_b, scale=3)
+        
+        # dswc
         if l_dswc is not None:
             cmap_dswc = ListedColormap([(1, 1, 1, 0.5), (1, 1, 1, 0)])
             ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, l_dswc[t, :, :], cmap=cmap_dswc)
-
-        n_thin = 2
-        u = roms_data.u_east[t, s, ::n_thin, ::n_thin]
-        v = roms_data.v_north[t, s, ::n_thin, ::n_thin]
-        lon = roms_data.grid.lon[::n_thin, ::n_thin]
-        lat = roms_data.grid.lat[::n_thin, ::n_thin]
-        ax.quiver(lon, lat, u, v, scale=3)
-
-        if dswc_polygons is not None:
-            p_collections = PatchCollection(dswc_polygons[t], alpha=0.5)
-            ax.add_collection(p_collections)
+        
+        # --- Surface ---
+        # colormap parameter
+        title2 = f'Surface: {time_str}'
+        ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
+        ax2 = plot_basic_map(ax2, location_info)
+        ax2.set_title(title2)
+        c2 = ax2.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, z_s,
+                            cmap=cmap, vmin=vmin, vmax=vmax, shading='nearest')
+        
+        # colorbar
+        l, b, w, h = ax2.get_position().bounds
+        cbax = fig.add_axes([l+w+0.01, b, 0.02, h])
+        cbar = plt.colorbar(c2, cax=cbax)
+        cbar.set_label(parameter)
+        
+        # velocities
+        u_s = roms_data.u_east[t, -1, ::n_thin, ::n_thin]
+        v_s = roms_data.v_north[t, -1, ::n_thin, ::n_thin]
+        ax2.quiver(lon, lat, u_s, v_s, scale=3)
+        
+        # dswc
+        if l_dswc is not None:
+            cmap_dswc = ListedColormap([(1, 1, 1, 0.5), (1, 1, 1, 0)])
+            ax2.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, l_dswc[t, :, :], cmap=cmap_dswc)
 
     t = np.arange(0, len(roms_data.time), t_interval)
     time = roms_data.time[t]
@@ -149,322 +296,55 @@ def plot_cycling_roms_map(roms_data:RomsData, parameter:str, s:int,
     fig = plot_cycler(single_plot, time)
     plt.show()
 
-def detect_dswc_in_transect(transect_data:RomsData) -> np.ndarray[bool]:
-    '''Detect dense shelf water outflows in a transect based on:
-    1. maximum depth to look for them
-    2. cooler bottom water than surface water
-    3. cooler water along the coast at the surface than offshore
-    4. faster flowing offshore water in bottom layer than in mid-layer'''
-
-    # parameters to play with:
-    max_depth = 50 # m
-    temp_diff_surface_bottom = 0. # positive for colder water at bottom
-    temp_diff_offshore_coast = 0.1 # positive for colder water onshore
-    minimum_bottom_flow = 0.05 # m/s mean flow in bottom 5 layers (needs to be 0 as minimum)
-
-    # maximum depth for which to search for dswc
-    l_h = transect_data.h <= max_depth
-
-    # shape of temp and other variables: [time, depth, distance along transect]
-    # bottom is at depth=0, surface is at depth=-1
-    # coast is at distance=0, offshore is at distance=-1 (assuming transects are defined in this direction!)
+def write_fraction_cells_dswc_in_time_to_csv(start_date:datetime, end_date:datetime,
+                                             roms_dir:str, location_info:LocationInfo,
+                                             output_path:str,):
     
-    # bottom temperature is lower than surface temperature
-    l_bottom = transect_data.temp[:, -1, :]-transect_data.temp[:, 0, :] > temp_diff_surface_bottom
-    # surface temperature at coast is lower than offshore
-    l_coast = transect_data.temp[:, -1, -1]-transect_data.temp[:, -1, 0] > temp_diff_offshore_coast
-    l_coast = np.repeat(l_coast[:, np.newaxis], l_bottom.shape[1], axis=1)
-
-    # mean flow in bottom layers > mean flow in mid layers
-    mean_flow_bl = np.nanmean(transect_data.u_down[:, :5, :], axis=1)
-    # l_flow = mean_flow_bl > 1.1*np.nanmean(transect_data.u_down[:, 10:15, :], axis=1)
-    # and mean flow in bottom layer needs to be positive
-    # l_flow = np.logical_and(l_flow, mean_flow_bl > minimum_bottom_flow)
-    l_flow = mean_flow_bl > minimum_bottom_flow
-
-    l_temp = np.logical_and(l_coast, l_bottom)
-    l_dswc = np.logical_and(np.logical_and(l_temp, l_flow), l_h)
-
-    return l_dswc
-
-@dataclass
-class DswcTransect:
-    index: int
-    time: datetime
-    lon_coast: float
-    lat_coast: float
-    lon_offshore: float
-    lat_offshore: float
-
-def find_dswc_in_transects(roms_data:RomsData, transects:list[dict]) -> list[DswcTransect]:
-    dswc_transects = []
-    for i, transect in enumerate(transects):
-        log.info(f'Detecting dense water outflows in transect {i+1}/{len(transects)}')
-        transect_data = get_transect_data(roms_data, transect['lon1'], transect['lat1'],
-                                          transect['lon2'], transect['lat2'], transect['ds'])
-        l_dswc = detect_dswc_in_transect(transect_data)
-        for t, time in enumerate(transect_data.time):
-            s = np.where(l_dswc[t, :])[0]
-            if s.any():
-                lon_coast = transect_data.lon[s[0]]
-                lat_coast = transect_data.lat[s[0]]
-                lon_offshore = transect_data.lon[s[-1]]
-                lat_offshore = transect_data.lat[s[-1]]
-                dswc_transect = DswcTransect(i, time, lon_coast, lat_coast, lon_offshore, lat_offshore)
-                dswc_transects.append(dswc_transect)
-
-    return np.array(dswc_transects)
-
-def group_dswc_transects(times:np.ndarray,
-                         dswc_transects:list[DswcTransect]) -> dict[datetime, list[DswcTransect]]:
-    dswc_transect_groups = {}
-    
-    for time in times:
-        l_time = [tt==time for tt in [dswc_transect.time for dswc_transect in dswc_transects]]
-        dswc_transects_t = dswc_transects[l_time]
-        transect_indices = [dswc_transect.index for dswc_transect in dswc_transects_t]
-        i_order = np.argsort(transect_indices)
-        dswc_transects_t = dswc_transects_t[i_order]
-        dswc_transect_groups_t = []
-        new_group = True
-        i0 = dswc_transects_t[0].index
-        for dswc_transect in dswc_transects_t:
-            if dswc_transect.index == i0:
-                # first time in loop: start new group
-                new_group = True
-            elif dswc_transect.index == i0+1:
-                # transect follows previous one: append to current group
-                new_group = False
-                group.append(dswc_transect)
-            elif dswc_transect.index > i0+1:
-                # transect does not follow previous one:
-                # start new group and append old group to grouped_dswc_transects_t list
-                new_group = True
-                dswc_transect_groups_t.append(group)
-            else:
-                raise ValueError(f"You shouldn't end up here.")
-            if new_group is True:
-                group = []
-                group.append(dswc_transect)
-                i0 = dswc_transect.index
-
-        dswc_transect_groups[time] = dswc_transect_groups_t
-
-    return dswc_transect_groups
-
-def create_dswc_polygons(dswc_transect_groups:dict[datetime, list[DswcTransect]]) -> dict[datetime, list[Polygon]]:
-    polygon_groups = {}
-
-    for time in dswc_transect_groups.keys():
-        polygon_groups_t = []
-
-        for dswc_group in dswc_transect_groups[time]:
-            lons = [dswc.lon_coast for dswc in dswc_group]
-            lats = [dswc.lat_coast for dswc in dswc_group]
-            lons.extend([dswc.lon_offshore for dswc in dswc_group[::-1]])
-            lats.extend([dswc.lat_offshore for dswc in dswc_group[::-1]])
-
-            polygon_groups_t.append(Polygon(np.array([lons, lats]).transpose(), closed=True))
-
-        polygon_groups[time] = polygon_groups_t
-
-    return polygon_groups
-
-def get_grid_locations_with_dswc(roms_data:RomsData, dswc_polygons:dict[datetime, list[Polygon]]) -> np.ndarray:
-    lons = roms_data.grid.lon.flatten()
-    lats = roms_data.grid.lat.flatten()
-
-    l_dswc = np.zeros((len(roms_data.time), roms_data.grid.lon.shape[0], roms_data.grid.lon.shape[1]))
-
-    for t, time in enumerate(roms_data.time):
-        if time not in dswc_polygons.keys():
-            warnings.warn(f'Did not search for dense water outflows on {time}, skipping.')
-            continue
-        for p in dswc_polygons[time]:
-            l_dswc_1d = p.contains_points(np.array([lons, lats]).transpose())
-            l_dswc[t, :, :] = np.reshape(l_dswc_1d, roms_data.grid.lon.shape)
-
-    return l_dswc
-
-def calculate_mean_density(roms_data:RomsData):
-    delta_z = np.diff(roms_data.grid.z_w, axis=0)
-    mean_density = np.sum(roms_data.density*delta_z, axis=1)/roms_data.grid.h
-    return mean_density
-
-def calculate_potential_energy_anomaly(roms_data:RomsData):
-    mean_density = calculate_mean_density(roms_data)
-    g = 9.81 # m/s2
-    delta_z = np.diff(roms_data.grid.z_w, axis=0)
-    phi = g/roms_data.grid.h*np.sum((np.repeat(mean_density[:, np.newaxis, :, :], roms_data.density.shape[1], axis=1)-roms_data.density)*roms_data.grid.z*delta_z, axis=1)
-    return phi
-
-def plot_potential_energy_anomaly_time_change(roms_data:RomsData, phi:np.ndarray,
-                                              ax=None, show=True, output_path=None):
-    dphidt = np.diff(np.nanmean(np.nanmean(phi, axis=1), axis=1))
-
-    if ax is None:
-        fig = plt.figure(figsize=(11, 8))
-        ax = plt.axes()
-
-    ax.plot(roms_data.time[1:], dphidt, '-k')
-    ax.grid(True, linestyle='--', alpha=0.5)
-    ax.set_xlim([roms_data.time[0], roms_data.time[-1]])
-    ax.set_ylim([-3, 3])
-    ax.set_ylabel('$\frac{\partial\phi}{\partial t}$', fontsize=20)
-
-    if output_path is not None:
-        log.info(f'Saving figure to: {output_path}')
-        plt.savefig(output_path, bbox_inches='tight', dpi=300)
-
-    if show is True:
-        plt.show()
-    else:
-        return ax
-
-def calculate_density_gradient_per_latitude(roms_data:RomsData, include_depth=100) -> np.ndarray:
-    depth_mean_density = calculate_mean_density(roms_data)
-    l_too_deep = roms_data.grid.h > include_depth
-    depth_mean_density[:, l_too_deep] = np.nan # excluding too deep layers
-    drho = np.diff(depth_mean_density, axis=2)
-    dx = 1/roms_data.grid.pm[:, :-1] # m
-    drho_dlon = drho/dx
-    mean_density_gradient = np.nanmean(drho_dlon, axis=2)
-    return mean_density_gradient
-
-def calculate_horizontal_richardson_number(roms_data:RomsData,
-                                           wind_data:WindData,
-                                           include_depth=100) -> np.ndarray:
-    '''Calculates the horizontal Richardson number (or Simpson number) as specified by
-    Mahjabin et al. (2020, Scientific Reports).'''
-    g = 9.81 # gravitational acceleration (m/s^2)
-    rho_w = 1025 # sea water density (kg/m^3): using a standard value for this, but could also use a mean value from roms
-    rho_a = 1.2 # air density (kg/m^3)
-    density_gradient = calculate_density_gradient_per_latitude(roms_data, include_depth=include_depth)
-    mean_h = np.nanmean(roms_data.grid.h, axis=1)
-    
-    mean_wind = np.nanmean(wind_data.vel, axis=2)
-    f_interp = interp1d(wind_data.lat[:, 0], mean_wind, fill_value='extrapolate')
-    mean_wind_interp = f_interp(roms_data.grid.lat[:, 0])
-    ks = 0.03*(0.63+0.066*mean_wind_interp**(1/3))/1000 # surface drag coefficient according to Pugh (1987)
-    u = np.sqrt(ks*rho_a/rho_w)*mean_wind_interp
-    Ri = g/rho_w*mean_h**2/u**2*density_gradient # ---> seems insanely large
-    return Ri
-
-def get_time_mean_gravitational_versus_wind_equation(roms_data:RomsData,
-                                                     wind_data:WindData) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    g = 9.81
-    rho_w = 1025
-    rho_a = 1.2
-    delta = 3*10**-3
-    Kmz = 1*10**-2
-
-    density_gradient = calculate_density_gradient_per_latitude(roms_data)
-    h = np.nanmean(roms_data.grid.h)
-    
+    n_days = (end_date-start_date).days
     time = []
-    gravitational_component = []
-    wind_component = []
-
-    n_days = (roms_data.time[-1]-roms_data.time[0]).days+1
-    t0 = datetime(roms_data.time[0].year, roms_data.time[0].month, roms_data.time[0].day)
-    for n in range(n_days):
-        start_time = t0+timedelta(days=n)
-        l_time_roms = get_l_time_range(roms_data.time, start_time, start_time)
-        l_time_wind = get_l_time_range(wind_data.time, start_time, start_time)
-
-        drhodx = np.nanmean(density_gradient[l_time_roms, :])
-        w = np.nanmean(wind_data.vel[l_time_wind, :, :])
-        ks = 0.03*(0.063+0.066*w**(1/3))/1000
-
-        time.append(start_time)
-        gravitational_component.append(1/320*g**2/rho_w*h**4/Kmz*drhodx**2)
-        wind_component.append(delta*ks*rho_a*w**3/h)
-
-    return np.array(time), np.array(gravitational_component), np.array(wind_component)
-
-def plot_timeseries_dswc_conditions(roms_data:RomsData, wind_data:WindData,
-                                    ax=None, show=True, output_path=None):
-    if ax is None:
-        fig = plt.figure(figsize=(10, 8))
-        ax = plt.axes()
-
-    time, grav, wind = get_time_mean_gravitational_versus_wind_equation(roms_data, wind_data)
-
-    ax.plot(time, np.log10(grav/wind), '-k')
-    ax.grid(True, linestyle='--', alpha=0.5)
-    ax.set_ylabel('Gravitational circulation forcing/\nWind mixing forcing')
-    ax.set_ylim([-6, 6])
-    ax.set_yticks([-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6])
-    ax.set_yticklabels(['$10^{-6}$', '$10^{-5}$', '$10^{-4}$', '$10^{-3}$',
-                        '0.01', '0.1', '1', '10', '100', '$10^3$',
-                        '$10^4$', '$10^5$', '$10^6$'])
+    f_dswc = []
+    for n in range(n_days+1):
+        load_day = start_date+timedelta(days=n)
+        roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, load_day, load_day,
+                                                         lon_range=location_info.lon_range,
+                                                         lat_range=location_info.lat_range)
+        roms_data = exclude_roms_data_past_depth(roms_data)
+        l_dswc = find_dswc_per_latitude(roms_data)
+        
+        time.append(roms_data.time)
+        f_dswc.append(np.sum(np.sum(l_dswc, axis=1), axis=1)/np.sum(roms_data.grid.h <= depth_limit))
+        
+    time = np.array(time).flatten()
+    f_dswc = np.array(f_dswc).flatten()
+    df = pd.DataFrame(np.array([time, f_dswc]).transpose(), columns=['time', 'f_dswc'])
+    log.info(f'Writing fraction of time dswc to: {output_path}')
+    df.to_csv(output_path, index=False)
     
-    if output_path is not None:
-        log.info(f'Saving figure to: {output_path}')
-        plt.savefig(output_path, bbox_inches='tight', dpi=300)
-
-    if show is True:
-        plt.show()
-    else:
-        return ax
-
 if __name__ == '__main__':
     start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 8, 31)
-    roms_dir = f'{get_dir_from_json("roms_data")}cwa/2017/'
+    end_date = datetime(2017, 9, 30)
+    
+    write_fraction_dswc = False
+    write_gravitational_wind_components = True
+    
+    roms_dir = f'{get_dir_from_json("roms_data")}2017/'
     era5_dir = f'{get_dir_from_json("era5_data")}'
     location_info = get_location_info('perth')
     
+    if write_fraction_dswc == True:
+        output_path_fdswc = 'temp_data/fraction_cells_dswc_in_time.csv'
+        write_fraction_cells_dswc_in_time_to_csv(start_date, end_date, roms_dir, location_info, output_path_fdswc)
+    
+    if write_gravitational_wind_components == True:
+        output_path_gw = 'temp_data/gravitational_wind_components_in_time.csv'
+        write_gravitation_wind_components_to_csv(start_date, end_date, roms_dir, era5_dir, location_info, output_path_gw)
+
+    # # --- test and manual checks ---
     # roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, start_date, end_date, lon_range=location_info.lon_range, lat_range=location_info.lat_range)
-    wind_data = read_era5_wind_data_from_netcdf(era5_dir, start_date, end_date, lon_range=location_info.lon_range, lat_range=location_info.lat_range)
+    # roms_data = exclude_roms_data_past_depth(roms_data)
     
-    # plot_timeseries_dswc_conditions(roms_data, wind_data)
-
-    n_days = (end_date-start_date).days+1
-    for n in range(n_days):
-        time = start_date+timedelta(days=n)
-        roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, time, time,
-                                                         lon_range=location_info.lon_range,
-                                                         lat_range=location_info.lat_range)
-        wind_data = read_era5_wind_data_from_netcdf(era5_dir, time, time,
-                                                    lon_range=location_info.lon_range,
-                                                    lat_range=location_info.lat_range)
-        density_gradient = calculate_density_gradient_per_latitude(roms_data)
-        phi = calculate_potential_energy_anomaly(roms_data)
-        dphidt = np.diff(np.nanmean(np.nanmean(phi, axis=1), axis=1))
-        wind_vel = np.nanmean(wind_data.vel, axis=2)
-        if n == 0:
-            times = [time]
-            density_gradients = density_gradient
-            dphidts = dphidt
-            wind_vels = wind_vel
-            continue
-        times.append(time)
-        density_gradients = np.concatenate([density_gradients, density_gradient])
-        dphidts = np.concatenate([dphidts, dphidt])
-        wind_vels = np.concatenate([wind_vels, wind_vel])
-
-    times = np.array(times)   
-
-    # phi = calculate_potential_energy_anomaly(roms_data, roms_data.grid)
-    # plot_potential_energy_anomaly_time_change(roms_data, phi, output_path=f'{get_dir_from_json("plots")}dphidt_perth_MarAug2017.jpg')
-
-    # all_transects = get_transects_from_json(transect_file)
-
-    # # plot_transects_on_map(roms_grid, location_info, transect_file)
+    # l_dswc = find_dswc_per_latitude(roms_data)
     
-    # # --- manual checks ---
-    # transect = all_transects[2]
-    # transect_data = get_transect_data(roms_data, transect['lon1'], transect['lat1'],
-    #                                   transect['lon2'], transect['lat2'], transect['ds'])
-    # l_dswc = detect_dswc_in_transect(transect_data)
-    # plot_cycling_roms_transect(transect_data, 'temp', vmin=20, vmax=22, l_dswc=l_dswc)
-    # # ---
-
-    # dswc_transects = find_dswc_in_transects(roms_data, all_transects)
-    # dswc_transect_groups = group_dswc_transects(roms_data.time, dswc_transects)
-    # polygon_groups = create_dswc_polygons(dswc_transect_groups)
-    # l_dswc = get_grid_locations_with_dswc(roms_data, polygon_groups)
-
-    # plot_cycling_roms_map(roms_data, 'temp', 0, location_info, vmin=20., vmax=22.,
-    #                       l_dswc=l_dswc)
+    # # plot_cycling_transect(roms_data, l_dswc=l_dswc)
+    
+    # plot_cycling_map(roms_data, l_dswc=l_dswc)
