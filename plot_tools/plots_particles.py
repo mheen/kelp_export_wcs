@@ -283,6 +283,8 @@ def _plot_age_in_deep_sea_cumulative_only(ax, particles:Particles, h_deep_sea:fl
     total_particles = particles.lon.shape[0]
     f_deep_sea_per_age = n_deep_sea_per_age/total_particles*100 # divided by total # particles
     f_cumulative_per_age = np.cumsum(f_deep_sea_per_age)
+    if h_deep_sea == 200:
+        print(f'Final percentage making it past shelf edge: {f_cumulative_per_age[-1]}')
 
     ax.plot(age_arriving_ds, f_cumulative_per_age, color=color, linestyle=linestyle, label=label)
 
