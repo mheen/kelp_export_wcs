@@ -5,6 +5,7 @@ from data.bathymetry_data import BathymetryData
 from data.roms_data import read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
 from data.climate_data import read_dmi_data, read_mei_data
 from data.kelp_data import KelpProbability
+from data.wind_data import WindData, read_era5_wind_data_from_netcdf, get_daily_mean_wind_data, convert_u_v_to_meteo_vel_dir
 from plot_tools.general import add_subtitle
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
@@ -16,9 +17,12 @@ from datetime import datetime, date
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.units as munits
+from matplotlib.patches import Patch
 import cartopy.crs as ccrs
 import numpy as np
 import cmocean
+import pandas as pd
+import os
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
@@ -171,12 +175,12 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # ---------------------------------------------------------------------------------
 # PARTICLES
 # ---------------------------------------------------------------------------------
-input_path_p_baseline = f'{pts_dir}cwa_perth_MarSep2017_baseline.nc'
-input_path_p_threshold = f'{pts_dir}sensitivity/cwa_perth_MarSep2017_thresholdvel.nc'
-input_path_p_logarithmic = f'{pts_dir}sensitivity/cwa_perth_MarSep2017_logarithmicvel.nc'
-p_baseline = Particles.read_from_netcdf(input_path_p_baseline)
-p_threshold = Particles.read_from_netcdf(input_path_p_threshold)
-p_logarithmic = Particles.read_from_netcdf(input_path_p_logarithmic)
+# input_path_p_baseline = f'{pts_dir}cwa_perth_MarSep2017_baseline.nc'
+# input_path_p_threshold = f'{pts_dir}sensitivity/cwa_perth_MarSep2017_thresholdvel.nc'
+# input_path_p_logarithmic = f'{pts_dir}sensitivity/cwa_perth_MarSep2017_logarithmicvel.nc'
+# p_baseline = Particles.read_from_netcdf(input_path_p_baseline)
+# p_threshold = Particles.read_from_netcdf(input_path_p_threshold)
+# p_logarithmic = Particles.read_from_netcdf(input_path_p_logarithmic)
 
 # --- Particle density comparison ---
 def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:DensityGrid,
@@ -225,25 +229,229 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
     plt.savefig(output_path, bbox_inches='tight', dpi=300)
     plt.close()
 
-dx = 0.05
-h_deep_sea = 200 # m
+# dx = 0.05
+# h_deep_sea = 200 # m
 
-pd_grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
-density_baseline = get_particle_density(pd_grid, p_baseline.lon, p_baseline.lat)
-density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
-density_logarithmic = get_particle_density(pd_grid, p_logarithmic.lon, p_logarithmic.lat)
+# pd_grid = DensityGrid(location_info.lon_range, location_info.lat_range, dx)
+# density_baseline = get_particle_density(pd_grid, p_baseline.lon, p_baseline.lat)
+# density_threshold = get_particle_density(pd_grid, p_threshold.lon, p_threshold.lat)
+# density_logarithmic = get_particle_density(pd_grid, p_logarithmic.lon, p_logarithmic.lat)
 
-output_pd_log_comparison = f'{plots_dir}figs6.jpg'
-plot_particle_density_comparison(density_baseline, density_logarithmic, pd_grid,
-                                 p_baseline, p_logarithmic, h_deep_sea,
-                                 location_info, 'Baseline Mar-Aug 2017', 'Logarithmic vel. Mar-Aug 2017',
-                                 output_pd_log_comparison)
+# output_pd_log_comparison = f'{plots_dir}figs6.jpg'
+# plot_particle_density_comparison(density_baseline, density_logarithmic, pd_grid,
+#                                  p_baseline, p_logarithmic, h_deep_sea,
+#                                  location_info, 'Baseline Mar-Aug 2017', 'Logarithmic vel. Mar-Aug 2017',
+#                                  output_pd_log_comparison)
 
-output_pd_thres_comparison = f'{plots_dir}figs8.jpg'
-plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
-                                 p_baseline, p_threshold, h_deep_sea,
-                                 location_info, 'Baseline Mar-Aug 2017', 'Threshold vel. Mar-Aug 2017',
-                                 output_pd_thres_comparison)
+# output_pd_thres_comparison = f'{plots_dir}figs8.jpg'
+# plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
+#                                  p_baseline, p_threshold, h_deep_sea,
+#                                  location_info, 'Baseline Mar-Aug 2017', 'Threshold vel. Mar-Aug 2017',
+#                                  output_pd_thres_comparison)
+
+# ---------------------------------------------------------------------------------
+# DSWC
+# ---------------------------------------------------------------------------------
+output_dswc_conditions = f'{plots_dir}figs9.jpg'
+
+start_date = datetime(2017, 3, 1)
+end_date = datetime(2017, 9, 30)
+location_info_perth = get_location_info('perth')
+wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
+                                            lon_range=location_info_perth.lon_range,
+                                            lat_range=location_info_perth.lat_range)
+wind_data = get_daily_mean_wind_data(wind_data)
+
+def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
+    if not os.path.exists(csv_gw):
+        raise ValueError(f'''Gravitational vs wind components file does not yet exist: {csv_gw}
+                            Please create it first by running write_gravitation_wind_components_to_csv (in dswc_detector.py)''')
+    df = pd.read_csv(csv_gw)
+    time_gw = [datetime.strptime(t, '%Y-%m-%d') for t in df['time'].values][:-1]
+    grav_c = df['grav_component'].values[:-1]
+    wind_c = df['wind_component'].values[:-1]
+    drhodx = df['drhodx'].values[:-1]
+    phi = df['phi'].values[:-1]
+    return time_gw, grav_c, wind_c, drhodx, phi
+
+def determine_l_time_dwswc_conditions(wind_data:WindData):
+    u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
+    v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
+    time, g, w, drhodx, phi = read_dswc_components()
+    l_prereq = np.logical_and(drhodx<0, phi>1)
+    # l_components = np.logical_or(g > w, u_mean > 0) # gravitational component stronger OR onshore winds
+    l_components = g > w
+    # l_onshore = np.logical_and(u_mean > 0, u_mean > v_mean)
+    # l_wind = np.logical_or(l_components, l_onshore) # STILL FIGURING OUT HOW TO INCLUDE THESE CONDITIONS
+    l_dswc = np.logical_and(l_prereq, l_components)
+    return l_dswc
+    
+time_gw, grav_c, wind_c, drhodx, phi = read_dswc_components()
+l_dswc = determine_l_time_dwswc_conditions(wind_data)
+
+ocean_blue = '#25419e'
+
+fig = plt.figure(figsize=(8, 15))
+plt.subplots_adjust(hspace=0.1)
+
+# (a) timeseries density gradient
+ax1 = plt.subplot(6, 2, (1, 2))
+scale_rho = 10**5
+scale_rho_str = '10$^{-5}$'
+
+ax1.plot(time_gw, drhodx*scale_rho, '-k')
+ax1.plot([time_gw[0], time_gw[-1]], [0, 0], '-', color='#808080')
+ax1.set_xlim([time_gw[0], time_gw[-1]])
+ax1.set_ylim([-3.5, 3.0])
+ax1.set_xticklabels([])
+ax1.set_ylabel(f'Density gradient\n({scale_rho_str} kg/m${-4}$)')
+add_subtitle(ax1, '(a) Horizontal density gradient')
+
+ylim1 = ax1.get_ylim()
+l_drhodx = drhodx < 0
+ax1.fill_between(time_gw, ylim1[0], ylim1[1], where=l_drhodx, color=ocean_blue, alpha=0.3)
+ax1.set_ylim(ylim1)
+ax1.grid(True, linestyle='--', axis='x')
+
+# (b) timeseries PEA
+ax2 = plt.subplot(6, 2, (3, 4))
+ax2.plot(time_gw, phi, '-k')
+ax2.set_xlim([time_gw[0], time_gw[-1]])
+ax2.set_ylabel('PEA (J m$^{-3}$)')
+ax2.set_ylim([0, 12.5])
+ax2.set_xticklabels([])
+add_subtitle(ax2, '(b) Potential energy anomaly')
+
+ylim2 = ax2.get_ylim()
+l_phi = phi > 1
+ax2.fill_between(time_gw, ylim2[0], ylim2[1], where=l_phi, color=ocean_blue, alpha=0.3)
+ax2.set_ylim(ylim2)
+ax2.grid(True, linestyle='--', axis='x')
+
+# (c) timeseries wind
+ax3 = plt.subplot(6, 2, (5, 6))
+u_w = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
+v_w = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
+vel_w, dir_w = convert_u_v_to_meteo_vel_dir(u_w, v_w)
+
+colors_w = [ocean_blue, '#808080']
+edge_colors_w = ['k', '#434343']
+
+ax3.plot(wind_data.time, vel_w, '--', color='#282828')
+
+for i in range(len(wind_data.time)): # WIND DIRECTIONS SEEM SUSPICIOUS!!
+    l_color = u_w[i] <= 0 # (false for onshore wind: allows dswc formation)
+    i_color = l_color.astype(int)
+    rotation = np.mod(dir_w[i]+180, 360) # conversion from coming from to going to direction
+    ax3.text(mdates.date2num(wind_data.time[i]), vel_w[i], '  ', rotation=rotation,
+                bbox=dict(boxstyle='rarrow', fc=colors_w[i_color], ec=edge_colors_w[i_color]),
+                fontsize=4)
+
+ax3.set_xlim([wind_data.time[0], wind_data.time[-1]])
+ax3.set_xticklabels([])
+ax3.set_ylabel('Wind speed (m/s)')
+ax3.set_ylim([0, 25])
+add_subtitle(ax3, '(c) Wind speed and direction')
+
+ylim3 = ax3.get_ylim()
+l_wind = u_w > 0
+ax3.fill_between(time_gw, ylim3[0], ylim3[1], where=l_wind, color=ocean_blue, alpha=0.3)
+ax3.set_ylim(ylim3)
+ax3.grid(True, linestyle='--', axis='x')
+
+# (d) timeseries gravitational vs wind components
+gw_scale = 10**5
+gw_scale_str = '10$^{-5}$'
+gw_unit_str = 'J m$^{-3}$ s$^{-1}$'
+
+ax4 = plt.subplot(6, 2, (7, 8))
+ax4.plot(time_gw, grav_c*gw_scale, '-k', label='Grav.')
+ax4.plot(time_gw, wind_c*gw_scale, '--', color=ocean_blue, label='Wind')
+l5 = ax4.legend(loc='upper left', bbox_to_anchor=(0.0, 0.9))
+ax4.set_xlim([time_gw[0], time_gw[-1]])
+ax4.set_xticklabels([])
+ax4.set_ylim([0, 2.0])
+ax4.set_ylabel(f'Component strength\n({gw_scale_str} {gw_unit_str})')
+add_subtitle(ax4, '(d) Gravitational stratification versus wind mixing components')
+
+ylim4 = ax4.get_ylim()
+l_comp = grav_c > wind_c
+ax4.fill_between(time_gw, ylim4[0], ylim4[1], where=l_comp, color=ocean_blue, alpha=0.3)
+ax4.set_ylim(ylim4)
+ax4.grid(True, linestyle='--', axis='x')
+
+# (e) combined dswc conditions
+ax5 = plt.subplot(6, 2, (9, 10))
+ax5.fill_between(time_gw, 0, 1, where=l_dswc, color=ocean_blue, alpha=0.3)
+ax5.set_ylim([0, 1])
+ax5.set_xlim([time_gw[0], time_gw[-1]])
+ax5.set_yticks([])
+ax5.set_yticklabels([])
+ax5.grid(True, linestyle='--', axis='x')
+add_subtitle(ax5, '(e) Conditions allowing for dense shelf water outflows')
+
+legend_elements = [Patch(facecolor=ocean_blue, edgecolor='k', label='Suitable'),
+                   Patch(facecolor='w', edgecolor='k', label='Unsuitable')]
+ax5.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(-0.02, 1.0))
+
+# (f) % time dswc conditions
+month_dswc = []
+p_dswc_c = []
+for n in range(time_gw[0].month, time_gw[-1].month+1):
+    l_time = [t.month == n for t in time_gw]
+    month_dswc.append(datetime(time_gw[0].year, n, 1))
+    p_dswc_c.append(np.sum(l_dswc[l_time])/np.sum(l_time))
+    
+month_dswc = np.array(month_dswc)
+str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
+p_dswc_c = np.array(p_dswc_c)
+
+width = []
+for n in range(time_gw[0].month, time_gw[-1].month+1):
+    t0 = datetime(time_gw[0].year, n, 1)
+    t1 = datetime(time_gw[0].year, n+1, 1)
+    width.append(0.8*(t1-t0).days)
+
+ax6 = plt.subplot(6, 2, 11)
+ax6.bar(month_dswc, p_dswc_c*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
+ax6.set_ylabel('Occurrence of\nconditions\n(% of time)')
+ax6.set_ylim([0, 100])
+add_subtitle(ax6, '(f) Occurrence of suitable conditions')
+
+l6, b6, w6, h6 = ax6.get_position().bounds
+ax6.set_position([l6, b6-0.02, w6, h6])
+
+# (g) % time dswc (figure 5d)
+csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
+if not os.path.exists(csv_dswc):
+    raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
+                        Please create it first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
+df = pd.read_csv(csv_dswc)
+time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
+f_dswc = df['f_dswc'].values
+l_dswc_n = f_dswc >= 0.1
+
+p_dswc = []
+for n in range(time_dswc[0].month, time_dswc[-1].month):
+    l_time = [t.month == n for t in time_dswc]
+    p_dswc.append(np.sum(l_dswc_n[l_time])/np.sum(l_time))
+
+p_dswc = np.array(p_dswc)
+    
+ax7 = plt.subplot(6, 2, 12)
+ax7.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
+ax7.set_ylabel('Occurrence of\noutflows\n(% of time)')
+ax7.yaxis.set_label_position("right")
+ax7.yaxis.tick_right()
+ax7.set_ylim([0, 100])
+add_subtitle(ax7, '(g) Occurrence of outflows')
+
+l7, b7, w7, h7 = ax7.get_position().bounds
+ax7.set_position([l7, b7-0.02, w7, h7])
+
+log.info(f'Saving figure to: {output_dswc_conditions}')
+plt.savefig(output_dswc_conditions, bbox_inches='tight', dpi=300)
+plt.close()
 
 # ---------------------------------------------------------------------------------
 # REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
@@ -259,7 +467,7 @@ plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
 # particles = Particles.read_from_netcdf(particle_path)
 
 # --- Components that make up Figure 6A ---
-# output_reefs = 'figs9.jpg'
+# output_reefs = 'figs10.jpg'
 
 # fig = plt.figure(figsize=(12, 6))
 # plt.subplots_adjust(wspace=0.7)
@@ -346,7 +554,7 @@ plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
 # plt.close()
 
 # # --- Map with % making it to deep sea ---
-# output_initial_ds = 'figs10.jpg'
+# output_initial_ds = 'figs11.jpg'
 
 # density0 = get_particle_density(grid, particles.lon0, particles.lat0)
 
@@ -378,7 +586,7 @@ plot_particle_density_comparison(density_baseline, density_threshold, pd_grid,
 # plt.close()
 
 # # --- Minimum and maximum example trajectories ---
-# output_tracks = 'figs11.jpg'
+# output_tracks = 'figs12.jpg'
 
 # t_release = particles.get_release_time_index()
 # p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
