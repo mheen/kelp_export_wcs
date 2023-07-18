@@ -8,6 +8,7 @@ from data.roms_data import get_cross_shelf_velocity_component, get_eta_xi_along_
 from data.roms_data import get_lon_lat_along_depth_contour, get_distance_along_transect
 from data.glider_data import GliderData
 from data.satellite_data import SatelliteSST, read_satellite_sst_from_netcdf
+from data.wind_data import WindData, read_era5_wind_data_from_netcdf, get_daily_mean_wind_data, convert_u_v_to_meteo_vel_dir
 from particles import Particles, get_particle_density, DensityGrid
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.general import add_subtitle
@@ -370,6 +371,7 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
             f_decomposed_min = np.cumsum(n_deep_sea_decomposed_min/total_particles*100)
             f_decomposed_max = np.cumsum(n_deep_sea_decomposed_max/total_particles*100)
             ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=colors[i], alpha=0.5)
+            print(f'Final percentage past shelf accounting for decomposition: minimum {f_decomposed_min[-1]}, mean {f_decomposed[-1]}, maximum {f_decomposed_max[-1]}')
         
     ax2.set_xlabel('Particle age (days)')
     ax2.set_ylabel('Particles past depth range\naccounting for decomposition (%)')
@@ -389,10 +391,10 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
 
         plt.close()
 
-def figure5(particles:Particles, h_deep_sea=200,
+def figure5(particles:Particles, wind_data:WindData, h_deep_sea=200,
             show=True, output_path=None):
     
-    fig = plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(8, 14))
     plt.subplots_adjust(hspace=0.3)
     
     # (a) histogram particles passing shelf
@@ -415,7 +417,7 @@ def figure5(particles:Particles, h_deep_sea=200,
     tick_labels = [center_bin.strftime("%b") for center_bin in center_bins]
     width = 0.8*np.array([dt.days for dt in np.diff(np.array(time_bins))])
     
-    ax1 = plt.subplot(2, 2, 1)
+    ax1 = plt.subplot(4, 2, 1)
     ax1.bar(center_bins, n_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
     ax1.plot(center_bins, n_releases_norm, 'xk', label='Particles released')
     ax1.set_ylabel('Particles passing shelf edge (%)')
@@ -433,7 +435,7 @@ def figure5(particles:Particles, h_deep_sea=200,
     f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(1, 8)])
     f_ds_month_norm = f_ds_month/total_particles*100
     
-    ax2 = plt.subplot(2, 2, 2)
+    ax2 = plt.subplot(4, 2, 2)
     ax2.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
     ax2.set_ylabel('Particles passing shelf edge\naccounting for decomposition (%)')
     ax2.set_ylim([0, 27])
@@ -451,7 +453,7 @@ def figure5(particles:Particles, h_deep_sea=200,
     str_time_cross = [d.strftime('%b') for d in time_cross]
     ucross = [np.nanmean(df.iloc[:, i].values) for i in range(len(df.columns))][2:9]
 
-    ax3 = plt.subplot(2, 2, 3)
+    ax3 = plt.subplot(4, 2, 3)
     ax3.bar(np.arange(len(time_cross)), ucross, color=ocean_blue, tick_label=str_time_cross)
     xlim = ax3.get_xlim()
     ax3.plot([-1, 12], [0, 0], '-k')
@@ -466,7 +468,7 @@ def figure5(particles:Particles, h_deep_sea=200,
     csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
     if not os.path.exists(csv_dswc):
         raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
-                         Please create is first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
+                         Please create it first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
     df = pd.read_csv(csv_dswc)
     time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
     f_dswc = df['f_dswc'].values
@@ -483,14 +485,14 @@ def figure5(particles:Particles, h_deep_sea=200,
     month_dswc = np.array(month_dswc)
     str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
         
-    ax4 = plt.subplot(2, 2, 4)
+    ax4 = plt.subplot(4, 2, 4)
     ax4.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
-    ax4.set_ylabel('Dense shelf water outflows\n(% of time)')
+    ax4.set_ylabel('Occurrence of\ndense shelf water outflows\n(% of time)')
     ax4.yaxis.set_label_position("right")
     ax4.yaxis.tick_right()
     ax4.set_ylim([0, 100])
     add_subtitle(ax4, '(d) Dense shelf water outflows')
-    
+
     if show is True:
         plt.show()
 
@@ -656,7 +658,16 @@ if __name__ == '__main__':
     # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
     # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
+    # # percentages past shelf:
+    # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
-    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 9, 30)
+    location_info_perth = get_location_info('perth')
+    wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
+                                                lon_range=location_info_perth.lon_range,
+                                                lat_range=location_info_perth.lat_range)
+    wind_data = get_daily_mean_wind_data(wind_data)
+    figure5(particles, wind_data, output_path=f'{plot_dir}fig5.jpg', show=False)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
