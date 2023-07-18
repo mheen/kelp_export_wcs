@@ -135,6 +135,8 @@ def write_gravitation_wind_components_to_csv(start_date:datetime, end_date:datet
     time = []
     grav_c = []
     wind_c = []
+    drhodx = []
+    phi = []
     for n in range(n_days):
         load_day = start_date+timedelta(days=n)
         roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, load_day, load_day,
@@ -149,11 +151,17 @@ def write_gravitation_wind_components_to_csv(start_date:datetime, end_date:datet
         g, w = calculate_gravitational_versus_wind_components(roms_data, wind_data)
         grav_c.append(g)
         wind_c.append(w)
+        drhodx_all = calculate_density_gradient_per_latitude(roms_data)
+        drhodx.append(np.nanmean(drhodx_all))
+        phi_all = calculate_potential_energy_anomaly(roms_data)
+        phi.append(np.nanmean(phi_all))
         
     time = np.array(time).flatten()
     grav_c = np.array(grav_c).flatten()
     wind_c = np.array(wind_c).flatten()
-    df = pd.DataFrame(np.array([time, grav_c, wind_c]).transpose(), columns=['time', 'grav_component', 'wind_component'])
+    drhodx = np.array(drhodx).flatten()
+    phi = np.array(phi).flatten()
+    df = pd.DataFrame(np.array([time, grav_c, wind_c, drhodx, phi]).transpose(), columns=['time', 'grav_component', 'wind_component', 'drhodx', 'phi'])
     log.info(f'Writing gravitational and wind component timeseries to: {output_path}')
     df.to_csv(output_path, index=False)
 
