@@ -391,13 +391,13 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
 
         plt.close()
 
-def figure5(particles:Particles, wind_data:WindData, h_deep_sea=200,
+def figure5(particles:Particles, h_deep_sea=200,
             show=True, output_path=None):
     
-    fig = plt.figure(figsize=(8, 14))
-    plt.subplots_adjust(hspace=0.3)
+    fig = plt.figure(figsize=(8, 5))
+    plt.subplots_adjust(hspace=0.3, wspace=0.3)
     
-    # (a) histogram particles passing shelf
+    # (a) histogram decomposed particles passing shelf2
     t_release = particles.get_release_time_index()
     p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
     
@@ -406,26 +406,15 @@ def figure5(particles:Particles, wind_data:WindData, h_deep_sea=200,
     time_bins = []
     for n in range(particles.time[-1].month-particles.time[0].month+2):
         time_bins.append(add_month_to_time(particles.time[0], n))
-    n_ds_month, _ = np.histogram(times_ds, bins=time_bins)
     n_releases, _ = np.histogram(times_release, bins=time_bins)
     
     total_particles = particles.lon.shape[0]
-    n_ds_month_norm = n_ds_month/total_particles*100
     n_releases_norm = n_releases/total_particles*100
     
     center_bins = np.array(time_bins[:-1]+np.diff(np.array(time_bins))/2)
     tick_labels = [center_bin.strftime("%b") for center_bin in center_bins]
     width = 0.8*np.array([dt.days for dt in np.diff(np.array(time_bins))])
     
-    ax1 = plt.subplot(4, 2, 1)
-    ax1.bar(center_bins, n_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
-    ax1.plot(center_bins, n_releases_norm, 'xk', label='Particles released')
-    ax1.set_ylabel('Particles passing shelf edge (%)')
-    ax1.set_ylim([0, 27])
-    add_subtitle(ax1, '(a) Particle export per month')
-    l1 = ax1.legend(loc='upper left', bbox_to_anchor=(0.0, -0.08))
-    
-    # (b) histogram decomposed particles passing shelf
     dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
     f_ds = np.exp(k*dt_ds)
     times_ds_int, _ = convert_datetime_to_time(times_ds)
@@ -435,36 +424,21 @@ def figure5(particles:Particles, wind_data:WindData, h_deep_sea=200,
     f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(1, 8)])
     f_ds_month_norm = f_ds_month/total_particles*100
     
-    ax2 = plt.subplot(4, 2, 2)
-    ax2.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
-    ax2.set_ylabel('Particles passing shelf edge\naccounting for decomposition (%)')
+    ax1 = plt.subplot(1, 2, 1)
+    ax1.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
+    ax1.set_ylabel('Particles passing shelf edge\naccounting for decomposition (%)')
+    ax1.set_ylim([0, 10.8])
+    ax1.spines['left'].set_color(kelp_green)
+    ax1.tick_params(axis='y', colors=kelp_green)
+    ax1.yaxis.label.set_color(kelp_green)
+    add_subtitle(ax1, '(a) Decomposed particle export')
+    
+    ax2 = ax1.twinx()
+    ax2.plot(center_bins, n_releases_norm, 'xk', label='Particles released')
+    ax2.set_ylabel('Particles released (%)')
     ax2.set_ylim([0, 27])
-    ax2.yaxis.set_label_position("right")
-    ax2.yaxis.tick_right()
-    add_subtitle(ax2, '(b) Decomposed export per month')
     
-    # (c) histogram cross-shelf export
-    csv_ucross = 'temp_data/perth_wide_monthly_mean_u_cross_100m.csv'
-    if not os.path.exists(csv_ucross):
-        raise ValueError(f'''Mean cross-shelf velocity file does not yet exist: {csv_ucross}
-                         Please create is first by running save_bottom_cross_shelf_velocities''')
-    df = pd.read_csv(csv_ucross)
-    time_cross = [datetime.strptime(d, '%Y-%m-%d') for d in df.columns.values][2:9]
-    str_time_cross = [d.strftime('%b') for d in time_cross]
-    ucross = [np.nanmean(df.iloc[:, i].values) for i in range(len(df.columns))][2:9]
-
-    ax3 = plt.subplot(4, 2, 3)
-    ax3.bar(np.arange(len(time_cross)), ucross, color=ocean_blue, tick_label=str_time_cross)
-    xlim = ax3.get_xlim()
-    ax3.plot([-1, 12], [0, 0], '-k')
-    ax3.set_xlim(xlim)
-    ax3.set_ylim([-0.02, 0.05])
-    ax3.set_ylabel('Offshore transport (m/s)')
-    # ax3.yaxis.set_label_position("right")
-    # ax3.yaxis.tick_right()
-    add_subtitle(ax3, '(c) Monthly mean offshore transport')
-    
-    # (d) histogram dswc occurrence
+    # (b) histogram dswc occurrence
     csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
     if not os.path.exists(csv_dswc):
         raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
@@ -485,13 +459,16 @@ def figure5(particles:Particles, wind_data:WindData, h_deep_sea=200,
     month_dswc = np.array(month_dswc)
     str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
         
-    ax4 = plt.subplot(4, 2, 4)
+    ax4 = plt.subplot(1, 2, 2)
     ax4.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
     ax4.set_ylabel('Occurrence of\ndense shelf water outflows\n(% of time)')
     ax4.yaxis.set_label_position("right")
     ax4.yaxis.tick_right()
     ax4.set_ylim([0, 100])
-    add_subtitle(ax4, '(d) Dense shelf water outflows')
+    ax4.spines['left'].set_color(ocean_blue)
+    ax4.tick_params(axis='y', colors=ocean_blue)
+    ax4.yaxis.label.set_color(ocean_blue)
+    add_subtitle(ax4, '(b) Dense shelf water outflows')
 
     if show is True:
         plt.show()
@@ -661,13 +638,6 @@ if __name__ == '__main__':
     # # percentages past shelf:
     # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 9, 30)
-    location_info_perth = get_location_info('perth')
-    wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
-                                                lon_range=location_info_perth.lon_range,
-                                                lat_range=location_info_perth.lat_range)
-    wind_data = get_daily_mean_wind_data(wind_data)
-    figure5(particles, wind_data, output_path=f'{plot_dir}fig5.jpg', show=False)
+    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
