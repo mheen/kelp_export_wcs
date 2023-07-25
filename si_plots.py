@@ -27,13 +27,20 @@ import os
 # ---------------------------------------------------------------------------------
 # USER INPUT
 # ---------------------------------------------------------------------------------
+# --- supporting methods ---
 plot_s1 = False # climate indices
-# plot_s2 does not exist yet
+plot_s2 = False # ROMS DSWC validation with 2017 gliders
 plot_s3 = False # ROMS horizontal resolution and bottom layer thickness
 plot_s4 = False # logarithmic profiles and correction factor
 plot_s5 = False # pts sensitivity for logarithmic correction
-plot_s6 = True # exceedance of threshold velocity
+plot_s6 = False # exceedance of threshold velocity
 plot_s7 = False # pts sensitivity for threshold velocity
+plot_s8 = False # DSWC conditions timeseries
+plot_s9 = False # example transects for different phi values
+# --- supporting results ---
+plot_s10 = True # plots that make up reef contributions
+plot_s11 = False # export per release location
+plot_s12 = False # example shortest and longest tracks
 
 # ---------------------------------------------------------------------------------
 # Set-up
@@ -59,7 +66,7 @@ time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 
 # ---------------------------------------------------------------------------------
-# Climate indices - Figure S1
+# CLIMATE INDICES
 # ---------------------------------------------------------------------------------
 if plot_s1 == True:
     time_mei, mei = read_mei_data()
@@ -281,409 +288,422 @@ if plot_s7 == True:
 # ---------------------------------------------------------------------------------
 # DSWC
 # ---------------------------------------------------------------------------------
-# output_dswc_conditions = f'{plots_dir}figs9.jpg'
+if plot_s8 == True:
+    output_dswc_conditions = f'{plots_dir}figs8.jpg'
 
-# start_date = datetime(2017, 3, 1)
-# end_date = datetime(2017, 9, 30)
-# location_info_perth = get_location_info('perth')
-# wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
-#                                             lon_range=location_info_perth.lon_range,
-#                                             lat_range=location_info_perth.lat_range)
-# wind_data = get_daily_mean_wind_data(wind_data)
-# u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
-# v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
-# vel_mean, dir_mean = convert_u_v_to_meteo_vel_dir(u_mean, v_mean)
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 9, 30)
+    location_info_perth = get_location_info('perth')
+    wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
+                                                lon_range=location_info_perth.lon_range,
+                                                lat_range=location_info_perth.lat_range)
+    wind_data = get_daily_mean_wind_data(wind_data)
+    u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
+    v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
+    vel_mean, dir_mean = convert_u_v_to_meteo_vel_dir(u_mean, v_mean)
 
-# def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
-#     if not os.path.exists(csv_gw):
-#         raise ValueError(f'''Gravitational vs wind components file does not yet exist: {csv_gw}
-#                             Please create it first by running write_gravitation_wind_components_to_csv (in dswc_detector.py)''')
-#     df = pd.read_csv(csv_gw)
-#     time_gw = [datetime.strptime(t, '%Y-%m-%d') for t in df['time'].values][:-1]
-#     grav_c = df['grav_component'].values[:-1]
-#     wind_c = df['wind_component'].values[:-1]
-#     drhodx = df['drhodx'].values[:-1]
-#     phi = df['phi'].values[:-1]
-#     return time_gw, grav_c, wind_c, drhodx, phi
+    def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
+        if not os.path.exists(csv_gw):
+            raise ValueError(f'''Gravitational vs wind components file does not yet exist: {csv_gw}
+                                Please create it first by running write_gravitation_wind_components_to_csv (in dswc_detector.py)''')
+        df = pd.read_csv(csv_gw)
+        time_gw = [datetime.strptime(t, '%Y-%m-%d') for t in df['time'].values][:-1]
+        grav_c = df['grav_component'].values[:-1]
+        wind_c = df['wind_component'].values[:-1]
+        drhodx = df['drhodx'].values[:-1]
+        phi = df['phi'].values[:-1]
+        return time_gw, grav_c, wind_c, drhodx, phi
 
-# def determine_l_time_dwswc_conditions(dir_mean):
-#     time, g, w, drhodx, phi = read_dswc_components()
-#     l_drhodx = drhodx < 0
-#     l_phi = phi > 5
-#     l_prereq = np.logical_and(l_drhodx, l_phi)
-#     l_components = g > w
-#     l_onshore = np.logical_and(225 < dir_mean, dir_mean < 315)
-#     l_wind = np.logical_or(l_components, l_onshore)
-#     l_dswc = np.logical_and(l_prereq, l_components)
-#     return l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc
+    def determine_l_time_dwswc_conditions(dir_mean):
+        time, g, w, drhodx, phi = read_dswc_components()
+        l_drhodx = drhodx < 0
+        l_phi = phi > 5
+        l_prereq = np.logical_and(l_drhodx, l_phi)
+        l_components = g > w
+        l_onshore = np.logical_and(225 < dir_mean, dir_mean < 315)
+        l_wind = np.logical_or(l_components, l_onshore)
+        l_dswc = np.logical_and(l_prereq, l_components)
+        return l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc
+        
+    time_gw, grav_c, wind_c, drhodx, phi = read_dswc_components()
+    l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc = determine_l_time_dwswc_conditions(dir_mean)
+
+    ocean_blue = '#25419e'
+
+    fig = plt.figure(figsize=(8, 15))
+    plt.subplots_adjust(hspace=0.1)
+
+    # (a) timeseries density gradient
+    ax1 = plt.subplot(6, 2, (1, 2))
+    scale_rho = 10**5
+    scale_rho_str = '10$^{-5}$'
+    drhodx_units = 'kg m$^{-4}$'
+
+    ax1.plot(time_gw, drhodx*scale_rho, '-k')
+    ax1.plot([time_gw[0], time_gw[-1]], [0, 0], '-', color='#808080')
+    ax1.set_xlim([time_gw[0], time_gw[-1]])
+    ax1.set_ylim([-3.5, 3.0])
+    ax1.set_xticklabels([])
+    ax1.set_ylabel(f'Density gradient\n({scale_rho_str} {drhodx_units})')
+    add_subtitle(ax1, '(a) Horizontal density gradient')
+
+    ylim1 = ax1.get_ylim()
+    ax1.fill_between(time_gw, ylim1[0], ylim1[1], where=l_drhodx, color=ocean_blue, alpha=0.3)
+    ax1.set_ylim(ylim1)
+    ax1.grid(True, linestyle='--', axis='x')
+
+    # (b) timeseries PEA
+    ax2 = plt.subplot(6, 2, (3, 4))
+    ax2.plot(time_gw, phi, '-k')
+    ax2.set_xlim([time_gw[0], time_gw[-1]])
+    ax2.set_ylabel('PEA (J m$^{-3}$)')
+    ax2.set_ylim([0, 12.5])
+    ax2.set_xticklabels([])
+    add_subtitle(ax2, '(b) Potential energy anomaly')
+
+    ylim2 = ax2.get_ylim()
+    ax2.fill_between(time_gw, ylim2[0], ylim2[1], where=l_phi, color=ocean_blue, alpha=0.3)
+    ax2.set_ylim(ylim2)
+    ax2.grid(True, linestyle='--', axis='x')
+
+    # (c) timeseries gravitational vs wind components
+    gw_scale = 10**5
+    gw_scale_str = '10$^{-5}$'
+    gw_unit_str = 'J m$^{-3}$ s$^{-1}$'
+
+    ax4 = plt.subplot(6, 2, (5, 6))
+    ax4.plot(time_gw, grav_c*gw_scale, '-k', label='Grav.')
+    ax4.plot(time_gw, wind_c*gw_scale, '--', color=ocean_blue, label='Wind')
+    l5 = ax4.legend(loc='upper left', bbox_to_anchor=(0.0, 0.9))
+    ax4.set_xlim([time_gw[0], time_gw[-1]])
+    ax4.set_xticklabels([])
+    ax4.set_ylim([0, 2.0])
+    ax4.set_ylabel(f'Component strength\n({gw_scale_str} {gw_unit_str})')
+    add_subtitle(ax4, '(c) Gravitational stratification versus wind mixing components')
+
+    ylim4 = ax4.get_ylim()
+    ax4.fill_between(time_gw, ylim4[0], ylim4[1], where=l_components, color=ocean_blue, alpha=0.3)
+    ax4.set_ylim(ylim4)
+    ax4.grid(True, linestyle='--', axis='x')
+
+    # (d) timeseries wind
+    ax3 = plt.subplot(6, 2, (7, 8))
+
+    colors_w = ['#808080', ocean_blue]
+    edge_colors_w = ['k', '#434343']
+
+    ax3.plot(wind_data.time, vel_mean, '--', color='#282828')
+
+    for i in range(len(wind_data.time)):
+        i_color = l_onshore[i].astype(int)
+        rotation = 270-dir_mean[i]
+        ax3.text(mdates.date2num(wind_data.time[i]), vel_mean[i], '  ', rotation=rotation,
+                    bbox=dict(boxstyle='rarrow', fc=colors_w[i_color], ec=edge_colors_w[i_color]),
+                    fontsize=4)
+
+    ax3.set_xlim([wind_data.time[0], wind_data.time[-1]])
+    ax3.set_xticklabels([])
+    ax3.set_ylabel('Wind speed (m/s)')
+    ax3.set_ylim([0, 17.5])
+    add_subtitle(ax3, '(d) Wind speed and direction')
+
+    ylim3 = ax3.get_ylim()
+    ax3.fill_between(time_gw, ylim3[0], ylim3[1], where=l_wind, color=ocean_blue, alpha=0.3)
+    ax3.set_ylim(ylim3)
+    ax3.grid(True, linestyle='--', axis='x')
+
+    # (e) combined dswc conditions
+    ax5 = plt.subplot(6, 2, (9, 10))
+    ax5.fill_between(time_gw, 0, 1, where=l_dswc, color=ocean_blue)
+    ax5.set_ylim([0, 1])
+    ax5.set_xlim([time_gw[0], time_gw[-1]])
+    ax5.set_yticks([])
+    ax5.set_yticklabels([])
+    ax5.grid(True, linestyle='--', axis='x')
+    add_subtitle(ax5, '(e) Conditions allowing for dense shelf water outflows')
+
+    legend_elements = [Patch(facecolor=ocean_blue, edgecolor='k', label='Suitable'),
+                       Patch(facecolor='w', edgecolor='k', label='Unsuitable')]
+    ax5.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(-0.02, 1.0))
+
+    # (f) % time dswc conditions
+    month_dswc = []
+    p_dswc_c = []
+    for n in range(time_gw[0].month, time_gw[-1].month+1):
+        l_time = [t.month == n for t in time_gw]
+        month_dswc.append(datetime(time_gw[0].year, n, 1))
+        p_dswc_c.append(np.sum(l_dswc[l_time])/np.sum(l_time))
+        
+    month_dswc = np.array(month_dswc)
+    str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
+    p_dswc_c = np.array(p_dswc_c)
+
+    width = []
+    for n in range(time_gw[0].month, time_gw[-1].month+1):
+        t0 = datetime(time_gw[0].year, n, 1)
+        t1 = datetime(time_gw[0].year, n+1, 1)
+        width.append(0.8*(t1-t0).days)
+
+    ax6 = plt.subplot(6, 2, 11)
+    ax6.bar(month_dswc, p_dswc_c*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
+    ax6.set_ylabel('Occurrence of\nconditions\n(% of time)')
+    ax6.set_ylim([0, 100])
+    add_subtitle(ax6, '(f) Occurrence of suitable conditions')
+
+    l6, b6, w6, h6 = ax6.get_position().bounds
+    ax6.set_position([l6, b6-0.02, w6, h6])
+
+    # (g) % time dswc (figure 5d)
+    csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
+    if not os.path.exists(csv_dswc):
+        raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
+                            Please create it first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
+    df = pd.read_csv(csv_dswc)
+    time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
+    f_dswc = df['f_dswc'].values
+    l_dswc_n = f_dswc >= 0.1
+
+    p_dswc = []
+    for n in range(time_dswc[0].month, time_dswc[-1].month):
+        l_time = [t.month == n for t in time_dswc]
+        p_dswc.append(np.sum(l_dswc_n[l_time])/np.sum(l_time))
+
+    p_dswc = np.array(p_dswc)
+        
+    ax7 = plt.subplot(6, 2, 12)
+    ax7.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
+    ax7.set_ylabel('Occurrence of\noutflows\n(% of time)')
+    ax7.yaxis.set_label_position("right")
+    ax7.yaxis.tick_right()
+    ax7.set_ylim([0, 100])
+    add_subtitle(ax7, '(g) Occurrence of outflows')
+
+    l7, b7, w7, h7 = ax7.get_position().bounds
+    ax7.set_position([l7, b7-0.02, w7, h7])
+
+    log.info(f'Saving figure to: {output_dswc_conditions}')
+    plt.savefig(output_dswc_conditions, bbox_inches='tight', dpi=300)
+    plt.close()
+
+if plot_s9 == True:
+    output_dswc_conditions = f'{plots_dir}figs8.jpg'
     
-# time_gw, grav_c, wind_c, drhodx, phi = read_dswc_components()
-# l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc = determine_l_time_dwswc_conditions(dir_mean)
-
-# ocean_blue = '#25419e'
-
-# fig = plt.figure(figsize=(8, 15))
-# plt.subplots_adjust(hspace=0.1)
-
-# # (a) timeseries density gradient
-# ax1 = plt.subplot(6, 2, (1, 2))
-# scale_rho = 10**5
-# scale_rho_str = '10$^{-5}$'
-# drhodx_units = 'kg m$^{-4}$'
-
-# ax1.plot(time_gw, drhodx*scale_rho, '-k')
-# ax1.plot([time_gw[0], time_gw[-1]], [0, 0], '-', color='#808080')
-# ax1.set_xlim([time_gw[0], time_gw[-1]])
-# ax1.set_ylim([-3.5, 3.0])
-# ax1.set_xticklabels([])
-# ax1.set_ylabel(f'Density gradient\n({scale_rho_str} {drhodx_units})')
-# add_subtitle(ax1, '(a) Horizontal density gradient')
-
-# ylim1 = ax1.get_ylim()
-# ax1.fill_between(time_gw, ylim1[0], ylim1[1], where=l_drhodx, color=ocean_blue, alpha=0.3)
-# ax1.set_ylim(ylim1)
-# ax1.grid(True, linestyle='--', axis='x')
-
-# # (b) timeseries PEA
-# ax2 = plt.subplot(6, 2, (3, 4))
-# ax2.plot(time_gw, phi, '-k')
-# ax2.set_xlim([time_gw[0], time_gw[-1]])
-# ax2.set_ylabel('PEA (J m$^{-3}$)')
-# ax2.set_ylim([0, 12.5])
-# ax2.set_xticklabels([])
-# add_subtitle(ax2, '(b) Potential energy anomaly')
-
-# ylim2 = ax2.get_ylim()
-# ax2.fill_between(time_gw, ylim2[0], ylim2[1], where=l_phi, color=ocean_blue, alpha=0.3)
-# ax2.set_ylim(ylim2)
-# ax2.grid(True, linestyle='--', axis='x')
-
-# # (c) timeseries gravitational vs wind components
-# gw_scale = 10**5
-# gw_scale_str = '10$^{-5}$'
-# gw_unit_str = 'J m$^{-3}$ s$^{-1}$'
-
-# ax4 = plt.subplot(6, 2, (5, 6))
-# ax4.plot(time_gw, grav_c*gw_scale, '-k', label='Grav.')
-# ax4.plot(time_gw, wind_c*gw_scale, '--', color=ocean_blue, label='Wind')
-# l5 = ax4.legend(loc='upper left', bbox_to_anchor=(0.0, 0.9))
-# ax4.set_xlim([time_gw[0], time_gw[-1]])
-# ax4.set_xticklabels([])
-# ax4.set_ylim([0, 2.0])
-# ax4.set_ylabel(f'Component strength\n({gw_scale_str} {gw_unit_str})')
-# add_subtitle(ax4, '(c) Gravitational stratification versus wind mixing components')
-
-# ylim4 = ax4.get_ylim()
-# ax4.fill_between(time_gw, ylim4[0], ylim4[1], where=l_components, color=ocean_blue, alpha=0.3)
-# ax4.set_ylim(ylim4)
-# ax4.grid(True, linestyle='--', axis='x')
-
-# # (d) timeseries wind
-# ax3 = plt.subplot(6, 2, (7, 8))
-
-# colors_w = ['#808080', ocean_blue]
-# edge_colors_w = ['k', '#434343']
-
-# ax3.plot(wind_data.time, vel_mean, '--', color='#282828')
-
-# for i in range(len(wind_data.time)):
-#     i_color = l_onshore[i].astype(int)
-#     rotation = 270-dir_mean[i]
-#     ax3.text(mdates.date2num(wind_data.time[i]), vel_mean[i], '  ', rotation=rotation,
-#                 bbox=dict(boxstyle='rarrow', fc=colors_w[i_color], ec=edge_colors_w[i_color]),
-#                 fontsize=4)
-
-# ax3.set_xlim([wind_data.time[0], wind_data.time[-1]])
-# ax3.set_xticklabels([])
-# ax3.set_ylabel('Wind speed (m/s)')
-# ax3.set_ylim([0, 17.5])
-# add_subtitle(ax3, '(d) Wind speed and direction')
-
-# ylim3 = ax3.get_ylim()
-# ax3.fill_between(time_gw, ylim3[0], ylim3[1], where=l_wind, color=ocean_blue, alpha=0.3)
-# ax3.set_ylim(ylim3)
-# ax3.grid(True, linestyle='--', axis='x')
-
-# # (e) combined dswc conditions
-# ax5 = plt.subplot(6, 2, (9, 10))
-# ax5.fill_between(time_gw, 0, 1, where=l_dswc, color=ocean_blue)
-# ax5.set_ylim([0, 1])
-# ax5.set_xlim([time_gw[0], time_gw[-1]])
-# ax5.set_yticks([])
-# ax5.set_yticklabels([])
-# ax5.grid(True, linestyle='--', axis='x')
-# add_subtitle(ax5, '(e) Conditions allowing for dense shelf water outflows')
-
-# legend_elements = [Patch(facecolor=ocean_blue, edgecolor='k', label='Suitable'),
-#                    Patch(facecolor='w', edgecolor='k', label='Unsuitable')]
-# ax5.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(-0.02, 1.0))
-
-# # (f) % time dswc conditions
-# month_dswc = []
-# p_dswc_c = []
-# for n in range(time_gw[0].month, time_gw[-1].month+1):
-#     l_time = [t.month == n for t in time_gw]
-#     month_dswc.append(datetime(time_gw[0].year, n, 1))
-#     p_dswc_c.append(np.sum(l_dswc[l_time])/np.sum(l_time))
+    log.info(f'Saving figure to: {output_dswc_conditions}')
+    plt.savefig(output_dswc_conditions, bbox_inches='tight', dpi=300)
+    plt.close()
     
-# month_dswc = np.array(month_dswc)
-# str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
-# p_dswc_c = np.array(p_dswc_c)
-
-# width = []
-# for n in range(time_gw[0].month, time_gw[-1].month+1):
-#     t0 = datetime(time_gw[0].year, n, 1)
-#     t1 = datetime(time_gw[0].year, n+1, 1)
-#     width.append(0.8*(t1-t0).days)
-
-# ax6 = plt.subplot(6, 2, 11)
-# ax6.bar(month_dswc, p_dswc_c*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
-# ax6.set_ylabel('Occurrence of\nconditions\n(% of time)')
-# ax6.set_ylim([0, 100])
-# add_subtitle(ax6, '(f) Occurrence of suitable conditions')
-
-# l6, b6, w6, h6 = ax6.get_position().bounds
-# ax6.set_position([l6, b6-0.02, w6, h6])
-
-# # (g) % time dswc (figure 5d)
-# csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
-# if not os.path.exists(csv_dswc):
-#     raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
-#                         Please create it first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
-# df = pd.read_csv(csv_dswc)
-# time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
-# f_dswc = df['f_dswc'].values
-# l_dswc_n = f_dswc >= 0.1
-
-# p_dswc = []
-# for n in range(time_dswc[0].month, time_dswc[-1].month):
-#     l_time = [t.month == n for t in time_dswc]
-#     p_dswc.append(np.sum(l_dswc_n[l_time])/np.sum(l_time))
-
-# p_dswc = np.array(p_dswc)
-    
-# ax7 = plt.subplot(6, 2, 12)
-# ax7.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
-# ax7.set_ylabel('Occurrence of\noutflows\n(% of time)')
-# ax7.yaxis.set_label_position("right")
-# ax7.yaxis.tick_right()
-# ax7.set_ylim([0, 100])
-# add_subtitle(ax7, '(g) Occurrence of outflows')
-
-# l7, b7, w7, h7 = ax7.get_position().bounds
-# ax7.set_position([l7, b7-0.02, w7, h7])
-
-# log.info(f'Saving figure to: {output_dswc_conditions}')
-# plt.savefig(output_dswc_conditions, bbox_inches='tight', dpi=300)
-# plt.close()
-
 # ---------------------------------------------------------------------------------
 # REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
 # ---------------------------------------------------------------------------------
-# h_deep_sea = 200
-# dx = 0.01
-# location_info_p = get_location_info('perth')
+if plot_s10 == True:
+    h_deep_sea = 200
+    dx = 0.01
+    location_info_p = get_location_info('perth')
 
-# grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
-# x, y = np.meshgrid(grid.lon, grid.lat)
+    grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
+    x, y = np.meshgrid(grid.lon, grid.lat)
 
-# particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-# particles = Particles.read_from_netcdf(particle_path)
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particles = Particles.read_from_netcdf(particle_path)
 
-# --- Components that make up Figure 6A ---
-# output_reefs = 'figs10.jpg'
+    # --- Components that make up Figure 6A ---
+    output_reefs = f'{plots_dir}figs10.jpg'
 
-# fig = plt.figure(figsize=(12, 6))
-# plt.subplots_adjust(wspace=0.7)
+    fig = plt.figure(figsize=(8, 10))
+    plt.subplots_adjust(wspace=0.3, hspace=0.1)
 
-# # (a) kelp probability map
-# kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
-# ax1 = plt.subplot(1, 4, 1, projection=ccrs.PlateCarree())
-# ax1 = plot_basic_map(ax1, location_info_p)
-# ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
-# ax1, cbar1, c1 = kelp_prob.plot(location_info_p, ax=ax1, show=False)
-# cbar1.remove()
-# l1, b1, w1, h1 = ax1.get_position().bounds
-# cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
-# cbar1 = plt.colorbar(c1, cax=cbax1)
-# cbar1.set_label('Probability of kelp')
-# add_subtitle(ax1, '(a) Kelp probability')
+    # (a) kelp probability map
+    kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+    ax1 = plt.subplot(2, 2, 1, projection=ccrs.PlateCarree())
+    ax1 = plot_basic_map(ax1, location_info_p)
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+    ax1, cbar1, c1 = kelp_prob.plot(location_info_p, ax=ax1, show=False)
+    ax1.set_xticklabels([])
+    cbar1.remove()
+    l1, b1, w1, h1 = ax1.get_position().bounds
+    cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
+    cbar1 = plt.colorbar(c1, cax=cbax1)
+    cbar1.set_label('Probability of kelp')
+    add_subtitle(ax1, '(a) Kelp probability')
 
-# # (b) release # particles
-# density0 = get_particle_density(grid, particles.lon0, particles.lat0)
-# density0[density0==0] = np.nan
+    # (b) release # particles
+    density0 = get_particle_density(grid, particles.lon0, particles.lat0)
+    density0[density0==0] = np.nan
 
-# ax2 = plt.subplot(1, 4, 2, projection=ccrs.PlateCarree())
-# ax2 = plot_basic_map(ax2, location_info_p)
-# ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-#                     ax=ax2, show=False, show_perth_canyon=False,
-#                     color='k', linewidths=0.7)
+    ax2 = plt.subplot(2, 2, 2, projection=ccrs.PlateCarree())
+    ax2 = plot_basic_map(ax2, location_info_p)
+    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                        ax=ax2, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
 
-# c2 = ax2.pcolormesh(x, y, density0, cmap='plasma', vmin=0, vmax=150)
-# ax2.set_yticklabels([])
-# l2, b2, w2, h2 = ax2.get_position().bounds
-# cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
-# cbar2 = plt.colorbar(c2, cax=cbax2)
-# cbar2.set_label('# particles released')
-# add_subtitle(ax2, '(b) Particle release')
+    c2 = ax2.pcolormesh(x, y, density0, cmap='plasma', vmin=0, vmax=150)
+    ax2.set_yticklabels([])
+    ax2.set_xticklabels([])
+    l2, b2, w2, h2 = ax2.get_position().bounds
+    cbax2 = fig.add_axes([l2+w2+0.01, b2, 0.02, h2])
+    cbar2 = plt.colorbar(c2, cax=cbax2)
+    cbar2.set_label('# particles released')
+    add_subtitle(ax2, '(b) Particle release')
 
-# # (c) # particles past shelf from initial location
-# l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
-# l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
+    # (c) # particles past shelf from initial location
+    l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
+    l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
 
-# density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
-#                                    particles.lat0[l_deep_sea_anytime])
-# density_ds0[density_ds0==0.] = np.nan
+    density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
+                                       particles.lat0[l_deep_sea_anytime])
+    density_ds0[density_ds0==0.] = np.nan
 
-# ax3 = plt.subplot(1, 4, 3, projection=ccrs.PlateCarree())
-# ax3 = plot_basic_map(ax3, location_info_p)
-# ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-#                     ax=ax3, show=False, show_perth_canyon=False,
-#                     color='k', linewidths=0.7)
+    ax3 = plt.subplot(2, 2, 3, projection=ccrs.PlateCarree())
+    ax3 = plot_basic_map(ax3, location_info_p)
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                        ax=ax3, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
 
-# c3 = ax3.pcolormesh(x, y, density_ds0, cmap='plasma', vmin=0, vmax=150)
-# ax3.set_yticklabels([])
-# l3, b3, w3, h3 = ax3.get_position().bounds
-# cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
-# cbar3 = plt.colorbar(c3, cax=cbax3)
-# cbar3.set_label('# particles passing shelf')
-# add_subtitle(ax3, '(c) Passing shelf')
+    c3 = ax3.pcolormesh(x, y, density_ds0, cmap='plasma', vmin=0, vmax=150)
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    ax3.set_position([l1, b3, w3, h3])
+    cbax3 = fig.add_axes([l1+w3+0.01, b3, 0.02, h3])
+    cbar3 = plt.colorbar(c3, cax=cbax3)
+    cbar3.set_label('# particles passing shelf')
+    add_subtitle(ax3, '(c) Passing shelf')
 
-# # (d) mean time to get past shelf
-# t_release = particles.get_release_time_index()
-# p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
-# dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+    # (d) mean time to get past shelf
+    t_release = particles.get_release_time_index()
+    p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+    dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
 
-# density_time_ds = get_particle_density(grid, particles.lon0[p_ds], particles.lat0[p_ds],
-#                                        values=dt_ds)
-# density_mean_dt = density_time_ds/density_ds0
-# density_mean_dt[density_mean_dt==0.] = np.nan
+    density_time_ds = get_particle_density(grid, particles.lon0[p_ds], particles.lat0[p_ds],
+                                           values=dt_ds)
+    density_mean_dt = density_time_ds/density_ds0
+    density_mean_dt[density_mean_dt==0.] = np.nan
 
-# ax4 = plt.subplot(1, 4, 4, projection=ccrs.PlateCarree())
-# ax4 = plot_basic_map(ax4, location_info_p)
-# ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-#                     ax=ax4, show=False, show_perth_canyon=False,
-#                     color='k', linewidths=0.7)
+    ax4 = plt.subplot(2, 2, 4, projection=ccrs.PlateCarree())
+    ax4 = plot_basic_map(ax4, location_info_p)
+    ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                        ax=ax4, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
 
-# c4 = ax4.pcolormesh(x, y, density_mean_dt, cmap=cmocean.cm.deep, vmin=0, vmax=30)
-# ax4.set_yticklabels([])
-# l4, b4, w4, h4 = ax4.get_position().bounds
-# cbax4 = fig.add_axes([l4+w4+0.01, b4, 0.02, h4])
-# cbar4 = plt.colorbar(c4, cax=cbax4)
-# cbar4.set_label('Mean time for particles to pass shelf (days)')
-# add_subtitle(ax4, '(c) Mean time')
+    c4 = ax4.pcolormesh(x, y, density_mean_dt, cmap=cmocean.cm.deep, vmin=0, vmax=30)
+    ax4.set_yticklabels([])
+    l4, b4, w4, h4 = ax4.get_position().bounds
+    cbax4 = fig.add_axes([l4+w4+0.01, b4, 0.02, h4])
+    cbar4 = plt.colorbar(c4, cax=cbax4)
+    cbar4.set_label('Mean time for particles to pass shelf (days)')
+    add_subtitle(ax4, '(d) Mean time')
 
-# log.info(f'Saving figure to: {output_reefs}')
-# plt.savefig(output_reefs, bbox_inches='tight', dpi=300)
-# plt.close()
+    log.info(f'Saving figure to: {output_reefs}')
+    plt.savefig(output_reefs, bbox_inches='tight', dpi=300)
+    plt.close()
 
 # # --- Map with % making it to deep sea ---
-# output_initial_ds = 'figs11.jpg'
+if plot_s11 == True:
+    output_initial_ds = f'{plots_dir}figs11.jpg'
 
-# density0 = get_particle_density(grid, particles.lon0, particles.lat0)
+    density0 = get_particle_density(grid, particles.lon0, particles.lat0)
 
-# l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
-# l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
+    l_deep_sea = particles.get_l_deep_sea(h_deep_sea)
+    l_deep_sea_anytime = np.any(l_deep_sea, axis=1)
 
-# density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
-#                                    particles.lat0[l_deep_sea_anytime])
+    density_ds0 = get_particle_density(grid, particles.lon0[l_deep_sea_anytime],
+                                    particles.lat0[l_deep_sea_anytime])
 
-# density = density_ds0/density0*100
-# density[density==0.] = np.nan
+    density = density_ds0/density0*100
+    density[density==0.] = np.nan
 
-# fig = plt.figure(figsize=(6, 8))
-# ax = plt.axes(projection=ccrs.PlateCarree())
-# ax = plot_basic_map(ax, location_info_p)
-# ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
-#                    ax=ax, show=False, show_perth_canyon=False,
-#                    color='k', linewidths=0.7)
+    fig = plt.figure(figsize=(4, 6))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+    ax = plot_basic_map(ax, location_info_p)
+    ax = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_p,
+                    ax=ax, show=False, show_perth_canyon=False,
+                    color='k', linewidths=0.7)
 
-# c = ax.pcolormesh(x, y, density, cmap='plasma', vmin=0, vmax=100)
-# l, b, w, h = ax.get_position().bounds
-# cbax = fig.add_axes([l+w+0.03, b, 0.05, h])
-# cbar = plt.colorbar(c, cax=cbax)
-# cbar.set_label('Particles making it to deep sea (%)')
-# ax.set_title('Export per initial location')
+    c = ax.pcolormesh(x, y, density, cmap='plasma', vmin=0, vmax=100)
+    l, b, w, h = ax.get_position().bounds
+    cbax = fig.add_axes([l+w+0.03, b, 0.05, h])
+    cbar = plt.colorbar(c, cax=cbax)
+    cbar.set_label('Particles making it to deep sea (%)')
+    add_subtitle(ax, 'Export per initial location')
 
-# log.info(f'Saving figure to: {output_initial_ds}')
-# plt.savefig(output_initial_ds, bbox_inches='tight', dpi=300)
-# plt.close()
+    log.info(f'Saving figure to: {output_initial_ds}')
+    plt.savefig(output_initial_ds, bbox_inches='tight', dpi=300)
+    plt.close()
 
-# # --- Minimum and maximum example trajectories ---
-# output_tracks = 'figs12.jpg'
+if plot_s12 == True:
+    # --- Minimum and maximum example trajectories ---
+    output_tracks = f'{plots_dir}figs12.jpg'
 
-# t_release = particles.get_release_time_index()
-# p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
-# dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
+    t_release = particles.get_release_time_index()
+    p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
+    dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
 
-# lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
-# lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
+    lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
+    lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
 
-# i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
-# lon0 = particles.lon0[p_ds]
-# lat0 = particles.lat0[p_ds]
-# p_ex_min = []
-# p_ex_max = []
-# for i in range(len(lon_examples)):
-#     l_lon = np.logical_and(lon0 >= grid.lon[i_ex[i].astype(int)], lon0 <= grid.lon[i_ex[i].astype(int)+1])
-#     l_lat = np.logical_and(lat0 >= grid.lat[j_ex[i].astype(int)], lat0 <= grid.lat[j_ex[i].astype(int)+1])
-#     ps_ex = np.where(np.logical_and(l_lon, l_lat))[0]
-#     i_sort = np.argsort(dt_ds[ps_ex]) # sort time ascending
-#     i_min = i_sort[0]
-#     i_max = i_sort[-1]
-#     p_ex_min.append(ps_ex[i_min])
-#     p_ex_max.append(ps_ex[i_max])
+    i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
+    lon0 = particles.lon0[p_ds]
+    lat0 = particles.lat0[p_ds]
+    p_ex_min = []
+    p_ex_max = []
+    for i in range(len(lon_examples)):
+        l_lon = np.logical_and(lon0 >= grid.lon[i_ex[i].astype(int)], lon0 <= grid.lon[i_ex[i].astype(int)+1])
+        l_lat = np.logical_and(lat0 >= grid.lat[j_ex[i].astype(int)], lat0 <= grid.lat[j_ex[i].astype(int)+1])
+        ps_ex = np.where(np.logical_and(l_lon, l_lat))[0]
+        i_sort = np.argsort(dt_ds[ps_ex]) # sort time ascending
+        i_min = i_sort[0]
+        i_max = i_sort[-1]
+        p_ex_min.append(ps_ex[i_min])
+        p_ex_max.append(ps_ex[i_max])
 
-# int_t = 8 # plots daily dots on tracks
+    int_t = 8 # plots daily dots on tracks
 
-# fig = plt.figure(figsize=(8, 6))
-# plt.subplots_adjust(wspace=0.1)
+    fig = plt.figure(figsize=(8, 6))
+    plt.subplots_adjust(wspace=0.1)
 
-# location_info_w = get_location_info('perth_wide_south')
+    location_info_w = get_location_info('perth_wide_south')
 
-# # (a) Minimum example tracks
-# ax1 = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
-# ax1 = plot_basic_map(ax1, location_info_w)
-# ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
-#                     ax=ax1, show=False, show_perth_canyon=False,
-#                     color='k', linewidths=0.7)
+    # (a) Minimum example tracks
+    ax1 = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
+    ax1 = plot_basic_map(ax1, location_info_w)
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
+                        ax=ax1, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
 
-# lon = particles.lon[p_ds, :]
-# lat = particles.lat[p_ds, :]
-# # cm = mpl.colormaps['summer']
-# colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
-# for i in range(len(p_ex_min)):
-#     # color = cm(i/(len(p_ex)-1))
-#     color = colors[i]
-#     ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]], lat[p_ex_min[i], :t_ds[p_ex_min[i]]], '-', color=color)
-#     ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], lat[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], '.', color=color)
-#     ax1.plot(lon0[p_ex_min[i]], lat0[p_ex_min[i]], 'xk')
-#     ax1.plot(lon[p_ex_min[i], t_ds[p_ex_min[i]]], lat[p_ex_min[i], t_ds[p_ex_min[i]]], 'ok')
-    
-# add_subtitle(ax1, '(a) Shortest particle trajectories')
+    lon = particles.lon[p_ds, :]
+    lat = particles.lat[p_ds, :]
+    # cm = mpl.colormaps['summer']
+    colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
+    for i in range(len(p_ex_min)):
+        # color = cm(i/(len(p_ex)-1))
+        color = colors[i]
+        ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]], lat[p_ex_min[i], :t_ds[p_ex_min[i]]], '-', color=color)
+        ax1.plot(lon[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], lat[p_ex_min[i], :t_ds[p_ex_min[i]]:int_t], '.', color=color)
+        ax1.plot(lon0[p_ex_min[i]], lat0[p_ex_min[i]], 'xk')
+        ax1.plot(lon[p_ex_min[i], t_ds[p_ex_min[i]]], lat[p_ex_min[i], t_ds[p_ex_min[i]]], 'ok')
+        
+    add_subtitle(ax1, '(a) Shortest particle trajectories')
 
-# # (b) Maximum example tracks
-# ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
-# ax2 = plot_basic_map(ax2, location_info_w)
-# ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
-#                     ax=ax2, show=False, show_perth_canyon=False,
-#                     color='k', linewidths=0.7)
-# ax2.set_yticklabels([])
+    # (b) Maximum example tracks
+    ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
+    ax2 = plot_basic_map(ax2, location_info_w)
+    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
+                        ax=ax2, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    ax2.set_yticklabels([])
 
-# lon = particles.lon[p_ds, :]
-# lat = particles.lat[p_ds, :]
-# # cm = mpl.colormaps['summer']
-# colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
-# for i in range(len(p_ex_max)):
-#     # color = cm(i/(len(p_ex)-1))
-#     color = colors[i]
-#     ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]], lat[p_ex_max[i], :t_ds[p_ex_max[i]]], '-', color=color)
-#     ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], lat[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], '.', color=color)
-#     ax2.plot(lon0[p_ex_max[i]], lat0[p_ex_max[i]], 'xk')
-#     ax2.plot(lon[p_ex_max[i], t_ds[p_ex_max[i]]], lat[p_ex_max[i], t_ds[p_ex_max[i]]], 'ok')
-    
-# add_subtitle(ax2, '(b) Longest particle trajectories')
+    lon = particles.lon[p_ds, :]
+    lat = particles.lat[p_ds, :]
+    # cm = mpl.colormaps['summer']
+    colors = ['#2e2d4d', '#5d8888', '#c88066', '#4f5478', '#ebc08b', '#c15251']
+    for i in range(len(p_ex_max)):
+        # color = cm(i/(len(p_ex)-1))
+        color = colors[i]
+        ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]], lat[p_ex_max[i], :t_ds[p_ex_max[i]]], '-', color=color)
+        ax2.plot(lon[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], lat[p_ex_max[i], :t_ds[p_ex_max[i]]:int_t], '.', color=color)
+        ax2.plot(lon0[p_ex_max[i]], lat0[p_ex_max[i]], 'xk')
+        ax2.plot(lon[p_ex_max[i], t_ds[p_ex_max[i]]], lat[p_ex_max[i], t_ds[p_ex_max[i]]], 'ok')
+        
+    add_subtitle(ax2, '(b) Longest particle trajectories')
 
-# log.info(f'Saving figure to: {output_tracks}')
-# plt.savefig(output_tracks, bbox_inches='tight', dpi=300)
-# plt.close()
+    log.info(f'Saving figure to: {output_tracks}')
+    plt.savefig(output_tracks, bbox_inches='tight', dpi=300)
+    plt.close()
