@@ -2,6 +2,7 @@ import os, sys
 parent = os.path.abspath('.')
 sys.path.insert(1, parent)
 
+from dswc_detector import calculate_potential_energy_anomaly
 from tools.files import get_dir_from_json, get_daily_files_in_time_range
 from tools.timeseries import get_closest_time_index, get_l_time_range
 from tools.coordinates import get_transect_lons_lats_ds_from_json
@@ -13,6 +14,7 @@ from plot_tools.plots_bathymetry import plot_contours
 from location_info import LocationInfo, get_location_info
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.general import add_subtitle
+from plot_tools.plot_cycler import plot_cycler
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -31,6 +33,56 @@ munits.registry[datetime] = converter
 
 locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
 formatter = mdates.ConciseDateFormatter(locator)
+
+def plot_cycling_roms_map(roms_data:RomsData, location_info:LocationInfo,
+                          parameter_values=None, parameter='temp',
+                          t_interval=1, s=-1, # surface
+                          vmin=0., vmax=15., cmap=cmocean.cm.tempo):
+    if parameter_values is None:
+        if hasattr(roms_data, parameter):
+            values = getattr(roms_data, parameter)
+            if len(values.shape) == 4:
+                values = values[:, s, :, :] # [time, s, eta, xi]
+            elif len(values.shape) == 3:
+                values = values[:, :, :] # [time, eta, xi] -> correct? or can also be [s, eta, xi]?
+            elif len(values.shape) == 2:
+                values = values[:, :] # [eta, xi]
+        elif hasattr(roms_data.grid, parameter):
+            values = getattr(roms_data.grid, parameter)
+            if len(values.shape) == 3:
+                values = values[s, :, :] # [s, eta, xi] (because grid data is non-time dependent)
+            elif len(values.shape) == 2:
+                values = values[:, :] # [eta, xi]
+        elif parameter == 'velocity':
+            u = roms_data.u_east[:, s, :, :]
+            v = roms_data.v_north[:, s, :, :]
+            values = np.sqrt(u**2+v**2)
+        else:
+            raise ValueError(f'Unknown parameter {parameter} in RomsData')
+    else:
+        values = parameter_values
+    
+    def single_plot(fig, req_time):
+        t = get_closest_time_index(roms_data.time, req_time)
+        time_str = roms_data.time[t].strftime('%d-%m-%Y %H:%M')
+
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        ax = plot_basic_map(ax, location_info)
+        ax.set_title(time_str)
+        c = ax.pcolormesh(roms_data.grid.lon, roms_data.grid.lat, values[t, :, :],
+                          cmap=cmap, vmin=vmin, vmax=vmax, shading='nearest')
+
+        if parameter == 'velocity':
+            ax.quiver(roms_data.grid.lon, roms_data.grid.lat, u[t, :, :], v[t, :, :])
+
+        cbar = plt.colorbar(c)
+        cbar.set_label('')
+
+    t = np.arange(0, len(roms_data.time), t_interval)
+    time = roms_data.time[t]
+
+    fig = plot_cycler(single_plot, time)
+    plt.show()
 
 def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
                   parameter:str, time:datetime, s=-1, # default: surface
@@ -380,27 +432,32 @@ def plot_exceedance_threshold_velocity(input_dir:str, start_date:datetime, end_d
         with open(pickle_file, 'wb') as f:
             pickle.dump((vel_bins, n_vel, p_exceed), f)
 
-    fig = plt.figure(figsize=(8, 11))
-    ax1 = plt.subplot(2, 1, 1)
+    fig = plt.figure(figsize=(12, 5))
+    ax1 = plt.subplot(1, 3, (1, 2))
     ax1 = plot_exceedance_threshold_velocity_histogram(input_dir, start_date, end_date, thres_vel, thres_sd, thres_name,
                                                        vel_bins=vel_bins, n_vel=n_vel,
                                                        color=color, edgecolor=edgecolor,
                                                        show=False,
                                                        ax=ax1)
     ax1.set_title('')
-    add_subtitle(ax1, f'(a) Exceedance of threshold velocity histogram ({start_date.strftime("%b")}-{end_date.strftime("%b %Y")})')
+    add_subtitle(ax1, f'(a) Exceedance of threshold velocity\n      histogram ({start_date.strftime("%b")}-{end_date.strftime("%b %Y")})')
 
-    ax2 = plt.subplot(2, 1, 2, projection=ccrs.PlateCarree())
+    ax2 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info)
     ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
-    ax2 = plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info,
+    ax2, c2, cbar2 = plot_exceedance_threshold_velocity_map(input_dir, start_date, end_date, thres_vel, location_info,
                                                  roms_grid=roms_grid, p_exceed=p_exceed,
                                                  cmap=cmap, show=False,
                                                  ax=ax2)
-    add_subtitle(ax2, '(b) Exceedance of threshold\nvelocity spatial variation')
+    cbar2.remove()
+    add_subtitle(ax2, '(b) Exceedance of threshold velocity\n      spatial variation')
+    
     l1, b1, w1, h1 = ax1.get_position().bounds
     l2, b2, w2, h2 = ax2.get_position().bounds
-    ax2.set_position([l1+w2/2, b2, w2, h2])
+    ax2.set_position([l2, b1, w2*h1/h2, h1])
+    cbax2 = fig.add_axes([l2+w2*h1/h2+0.02, b1, 0.02, h1])
+    cbar2 = plt.colorbar(c2, cax=cbax2)
+    cbar2.set_label('Exceedance of threshold velocity (%)')
     
     log.info(f'Saving figure to: {output_path}')
     plt.savefig(output_path, bbox_inches='tight', dpi=300)
@@ -446,7 +503,7 @@ def plot_exceedance_threshold_velocity_map(input_dir:str, start_date:datetime, e
     if show is True:
         plt.show()
     else:
-        return ax
+        return ax, c, cbar
 
 def plot_exceedance_threshold_velocity_histogram(input_dir:str, start_date:datetime, end_date:datetime,
                                                  thres_vel:float, thres_sd:float, thres_name:str, s=0, # bottom layer
@@ -505,6 +562,17 @@ def plot_exceedance_threshold_velocity_histogram(input_dir:str, start_date:datet
         return ax
 
 if __name__ == '__main__':
+    roms_dir = f'{get_dir_from_json("roms_data")}2017/'
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 3, 1)
+    location_info = get_location_info('perth')
+    roms_data = read_roms_data_from_multiple_netcdfs(roms_dir, start_date, end_date, lon_range=location_info.lon_range, lat_range=location_info.lat_range)
+    
+    # phi = calculate_potential_energy_anomaly(roms_data)
+    
+    # plot_cycling_roms_map(roms_data, location_info, parameter_values=phi)
+    plot_roms_transect(roms_data, 115.69, -31.81, 115.42, -31.89, 1., 'temp', datetime(2017, 3, 1))
+    
     # # --- Exceedance threshold velocity plots ---
     # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
     # thres_vel = 0.045#, 0.031]
@@ -541,47 +609,47 @@ if __name__ == '__main__':
     # animate_roms_transect(roms, lon1, lat1, lon2, lat2, ds, 'temp', start_date, end_date+timedelta(days=1), output_path=output_path_animation,
     #                       vmin=18, vmax=22, clabel='Temperature ($^o$C)', show_quivers=False)
 
-    # --- Gradient plots ---
-    input_dir = f'{get_dir_from_json("roms_data")}2017/'
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 8, 1)
-    lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
-    roms_data = get_roms_data_for_transect(input_dir, start_date, end_date, lon1, lat1, lon2, lat2)
-    density_gradient, density, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'density',
-                                                                                    lon1, lat1, lon2, lat2, ds)
-
-    plot_depth_integrated_gradient_along_transect(roms_data.time, density_gradient, 'density')
-
-    temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data.time, 'temp', lon1, lat1, lon2, lat2, ds)
-    salt_gradient, salt, distance, z = get_depth_integrated_gradient_along_transect(roms_data.time, 'salt', lon1, lat1, lon2, lat2, ds)
-
-    def plot_gradient_single_instance(time, values_gradient, values, distance, z, t=0):
-        fig = plt.figure(figsize=(7, 10))
-        ax1 = plt.subplot(4, 1, (3, 4))
-        c = ax1.pcolormesh(distance, z, values[t, :, :], cmap='RdBu_r')
-        plt.colorbar(c)
-
-        depth_mean_values = np.nanmean(values, axis=1)
-        ax2 = plt.subplot(4, 1, 2)
-        ax2.plot(distance, depth_mean_values[t, :])
-
-        ax3 = plt.subplot(4, 1, 1)
-        ax3.plot(time, values_gradient)
-
-        plt.show()
-
-    plot_gradient_single_instance(roms_data.time, density_gradient, density, distance, z)
-    plot_gradient_single_instance(roms_data.time, salt_gradient, salt, distance, z)
-    plot_gradient_single_instance(roms_data.time, temp_gradient, temp, distance, z)
-
-    # lon1 = 115.70
-    # lat1 = -31.76
-    # lon2 = 114.47
-    # lat2 = -31.80
-
-    # location_info = get_location_info('cwa_perth_zoom')
+    # # --- Gradient plots ---
     # input_dir = f'{get_dir_from_json("roms_data")}2017/'
-    # start_date = datetime(2017, 5, 1)
-    # end_date = datetime(2017, 5, 2)
-    # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
-    # plot_depth_gradient(roms, location_info, lon1, lat1, lon2, lat2)
+    # start_date = datetime(2017, 3, 1)
+    # end_date = datetime(2017, 8, 1)
+    # lon1, lat1, lon2, lat2, ds = get_transect_lons_lats_ds_from_json('two_rocks_glider')
+    # roms_data = get_roms_data_for_transect(input_dir, start_date, end_date, lon1, lat1, lon2, lat2)
+    # density_gradient, density, distance, z = get_depth_integrated_gradient_along_transect(roms_data, 'density',
+    #                                                                                 lon1, lat1, lon2, lat2, ds)
+
+    # plot_depth_integrated_gradient_along_transect(roms_data.time, density_gradient, 'density')
+
+    # temp_gradient, temp, distance, z = get_depth_integrated_gradient_along_transect(roms_data.time, 'temp', lon1, lat1, lon2, lat2, ds)
+    # salt_gradient, salt, distance, z = get_depth_integrated_gradient_along_transect(roms_data.time, 'salt', lon1, lat1, lon2, lat2, ds)
+
+    # def plot_gradient_single_instance(time, values_gradient, values, distance, z, t=0):
+    #     fig = plt.figure(figsize=(7, 10))
+    #     ax1 = plt.subplot(4, 1, (3, 4))
+    #     c = ax1.pcolormesh(distance, z, values[t, :, :], cmap='RdBu_r')
+    #     plt.colorbar(c)
+
+    #     depth_mean_values = np.nanmean(values, axis=1)
+    #     ax2 = plt.subplot(4, 1, 2)
+    #     ax2.plot(distance, depth_mean_values[t, :])
+
+    #     ax3 = plt.subplot(4, 1, 1)
+    #     ax3.plot(time, values_gradient)
+
+    #     plt.show()
+
+    # plot_gradient_single_instance(roms_data.time, density_gradient, density, distance, z)
+    # plot_gradient_single_instance(roms_data.time, salt_gradient, salt, distance, z)
+    # plot_gradient_single_instance(roms_data.time, temp_gradient, temp, distance, z)
+
+    # # lon1 = 115.70
+    # # lat1 = -31.76
+    # # lon2 = 114.47
+    # # lat2 = -31.80
+
+    # # location_info = get_location_info('cwa_perth_zoom')
+    # # input_dir = f'{get_dir_from_json("roms_data")}2017/'
+    # # start_date = datetime(2017, 5, 1)
+    # # end_date = datetime(2017, 5, 2)
+    # # roms = read_roms_data_from_multiple_netcdfs(input_dir, start_date, end_date)
+    # # plot_depth_gradient(roms, location_info, lon1, lat1, lon2, lat2)
