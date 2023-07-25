@@ -121,4 +121,4 @@ def get_daily_mean_wind_data(wind_data:WindData) -> WindData:
 
     dm_vel, dm_dir = convert_u_v_to_meteo_vel_dir(dm_u, dm_v)
 
-    return WindData(dm_time, wind_data.lon, wind_data.lat, dm_u, dm_u, dm_vel, dm_dir)
+    return WindData(dm_time, wind_data.lon, wind_data.lat, dm_u, dm_v, dm_vel, dm_dir)

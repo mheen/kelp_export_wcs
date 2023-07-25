@@ -261,6 +261,9 @@ wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), star
                                             lon_range=location_info_perth.lon_range,
                                             lat_range=location_info_perth.lat_range)
 wind_data = get_daily_mean_wind_data(wind_data)
+u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
+v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
+vel_mean, dir_mean = convert_u_v_to_meteo_vel_dir(u_mean, v_mean)
 
 def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
     if not os.path.exists(csv_gw):
@@ -274,20 +277,19 @@ def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time
     phi = df['phi'].values[:-1]
     return time_gw, grav_c, wind_c, drhodx, phi
 
-def determine_l_time_dwswc_conditions(wind_data:WindData):
-    u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
-    v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
+def determine_l_time_dwswc_conditions(dir_mean):
     time, g, w, drhodx, phi = read_dswc_components()
-    l_prereq = np.logical_and(drhodx<0, phi>1)
-    # l_components = np.logical_or(g > w, u_mean > 0) # gravitational component stronger OR onshore winds
+    l_drhodx = drhodx < 0
+    l_phi = phi > 1
+    l_prereq = np.logical_and(l_drhodx, l_phi)
     l_components = g > w
-    # l_onshore = np.logical_and(u_mean > 0, u_mean > v_mean)
-    # l_wind = np.logical_or(l_components, l_onshore) # STILL FIGURING OUT HOW TO INCLUDE THESE CONDITIONS
+    l_onshore = np.logical_and(225 < dir_mean, dir_mean < 315)
+    l_wind = np.logical_or(l_components, l_onshore)
     l_dswc = np.logical_and(l_prereq, l_components)
-    return l_dswc
+    return l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc
     
 time_gw, grav_c, wind_c, drhodx, phi = read_dswc_components()
-l_dswc = determine_l_time_dwswc_conditions(wind_data)
+l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc = determine_l_time_dwswc_conditions(dir_mean)
 
 ocean_blue = '#25419e'
 
@@ -298,17 +300,17 @@ plt.subplots_adjust(hspace=0.1)
 ax1 = plt.subplot(6, 2, (1, 2))
 scale_rho = 10**5
 scale_rho_str = '10$^{-5}$'
+drhodx_units = 'kg m$^{-4}$'
 
 ax1.plot(time_gw, drhodx*scale_rho, '-k')
 ax1.plot([time_gw[0], time_gw[-1]], [0, 0], '-', color='#808080')
 ax1.set_xlim([time_gw[0], time_gw[-1]])
 ax1.set_ylim([-3.5, 3.0])
 ax1.set_xticklabels([])
-ax1.set_ylabel(f'Density gradient\n({scale_rho_str} kg/m${-4}$)')
+ax1.set_ylabel(f'Density gradient\n({scale_rho_str} {drhodx_units})')
 add_subtitle(ax1, '(a) Horizontal density gradient')
 
 ylim1 = ax1.get_ylim()
-l_drhodx = drhodx < 0
 ax1.fill_between(time_gw, ylim1[0], ylim1[1], where=l_drhodx, color=ocean_blue, alpha=0.3)
 ax1.set_ylim(ylim1)
 ax1.grid(True, linestyle='--', axis='x')
@@ -323,48 +325,16 @@ ax2.set_xticklabels([])
 add_subtitle(ax2, '(b) Potential energy anomaly')
 
 ylim2 = ax2.get_ylim()
-l_phi = phi > 1
 ax2.fill_between(time_gw, ylim2[0], ylim2[1], where=l_phi, color=ocean_blue, alpha=0.3)
 ax2.set_ylim(ylim2)
 ax2.grid(True, linestyle='--', axis='x')
 
-# (c) timeseries wind
-ax3 = plt.subplot(6, 2, (5, 6))
-u_w = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
-v_w = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
-vel_w, dir_w = convert_u_v_to_meteo_vel_dir(u_w, v_w)
-
-colors_w = [ocean_blue, '#808080']
-edge_colors_w = ['k', '#434343']
-
-ax3.plot(wind_data.time, vel_w, '--', color='#282828')
-
-for i in range(len(wind_data.time)): # WIND DIRECTIONS SEEM SUSPICIOUS!!
-    l_color = u_w[i] <= 0 # (false for onshore wind: allows dswc formation)
-    i_color = l_color.astype(int)
-    rotation = np.mod(dir_w[i]+180, 360) # conversion from coming from to going to direction
-    ax3.text(mdates.date2num(wind_data.time[i]), vel_w[i], '  ', rotation=rotation,
-                bbox=dict(boxstyle='rarrow', fc=colors_w[i_color], ec=edge_colors_w[i_color]),
-                fontsize=4)
-
-ax3.set_xlim([wind_data.time[0], wind_data.time[-1]])
-ax3.set_xticklabels([])
-ax3.set_ylabel('Wind speed (m/s)')
-ax3.set_ylim([0, 25])
-add_subtitle(ax3, '(c) Wind speed and direction')
-
-ylim3 = ax3.get_ylim()
-l_wind = u_w > 0
-ax3.fill_between(time_gw, ylim3[0], ylim3[1], where=l_wind, color=ocean_blue, alpha=0.3)
-ax3.set_ylim(ylim3)
-ax3.grid(True, linestyle='--', axis='x')
-
-# (d) timeseries gravitational vs wind components
+# (c) timeseries gravitational vs wind components
 gw_scale = 10**5
 gw_scale_str = '10$^{-5}$'
 gw_unit_str = 'J m$^{-3}$ s$^{-1}$'
 
-ax4 = plt.subplot(6, 2, (7, 8))
+ax4 = plt.subplot(6, 2, (5, 6))
 ax4.plot(time_gw, grav_c*gw_scale, '-k', label='Grav.')
 ax4.plot(time_gw, wind_c*gw_scale, '--', color=ocean_blue, label='Wind')
 l5 = ax4.legend(loc='upper left', bbox_to_anchor=(0.0, 0.9))
@@ -372,17 +342,42 @@ ax4.set_xlim([time_gw[0], time_gw[-1]])
 ax4.set_xticklabels([])
 ax4.set_ylim([0, 2.0])
 ax4.set_ylabel(f'Component strength\n({gw_scale_str} {gw_unit_str})')
-add_subtitle(ax4, '(d) Gravitational stratification versus wind mixing components')
+add_subtitle(ax4, '(c) Gravitational stratification versus wind mixing components')
 
 ylim4 = ax4.get_ylim()
-l_comp = grav_c > wind_c
-ax4.fill_between(time_gw, ylim4[0], ylim4[1], where=l_comp, color=ocean_blue, alpha=0.3)
+ax4.fill_between(time_gw, ylim4[0], ylim4[1], where=l_components, color=ocean_blue, alpha=0.3)
 ax4.set_ylim(ylim4)
 ax4.grid(True, linestyle='--', axis='x')
 
+# (d) timeseries wind
+ax3 = plt.subplot(6, 2, (7, 8))
+
+colors_w = ['#808080', ocean_blue]
+edge_colors_w = ['k', '#434343']
+
+ax3.plot(wind_data.time, vel_mean, '--', color='#282828')
+
+for i in range(len(wind_data.time)):
+    i_color = l_onshore[i].astype(int)
+    rotation = 270-dir_mean[i]
+    ax3.text(mdates.date2num(wind_data.time[i]), vel_mean[i], '  ', rotation=rotation,
+                bbox=dict(boxstyle='rarrow', fc=colors_w[i_color], ec=edge_colors_w[i_color]),
+                fontsize=4)
+
+ax3.set_xlim([wind_data.time[0], wind_data.time[-1]])
+ax3.set_xticklabels([])
+ax3.set_ylabel('Wind speed (m/s)')
+ax3.set_ylim([0, 17.5])
+add_subtitle(ax3, '(d) Wind speed and direction')
+
+ylim3 = ax3.get_ylim()
+ax3.fill_between(time_gw, ylim3[0], ylim3[1], where=l_wind, color=ocean_blue, alpha=0.3)
+ax3.set_ylim(ylim3)
+ax3.grid(True, linestyle='--', axis='x')
+
 # (e) combined dswc conditions
 ax5 = plt.subplot(6, 2, (9, 10))
-ax5.fill_between(time_gw, 0, 1, where=l_dswc, color=ocean_blue, alpha=0.3)
+ax5.fill_between(time_gw, 0, 1, where=l_dswc, color=ocean_blue)
 ax5.set_ylim([0, 1])
 ax5.set_xlim([time_gw[0], time_gw[-1]])
 ax5.set_yticks([])
