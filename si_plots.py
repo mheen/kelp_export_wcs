@@ -37,8 +37,8 @@ plot_s4 = False # logarithmic profiles and correction factor
 plot_s5 = False # pts sensitivity for logarithmic correction
 plot_s6 = False # exceedance of threshold velocity
 plot_s7 = False # pts sensitivity for threshold velocity
-plot_s8 = False # DSWC conditions timeseries
-plot_s9 = True # example transects for different phi values
+plot_s8 = True # DSWC conditions timeseries
+plot_s9 = False # example transects for different phi values
 # --- supporting results ---
 plot_s10 = False # plots that make up reef contributions
 plot_s11 = False # export per release location
@@ -434,7 +434,7 @@ if plot_s8 == True:
     ax5.set_yticks([])
     ax5.set_yticklabels([])
     ax5.grid(True, linestyle='--', axis='x')
-    add_subtitle(ax5, '(e) Conditions allowing for dense shelf water outflows')
+    add_subtitle(ax5, '(e) Conditions allowing for dense shelf water transport')
 
     legend_elements = [Patch(facecolor=ocean_blue, edgecolor='k', label='Suitable'),
                        Patch(facecolor='w', edgecolor='k', label='Unsuitable')]
@@ -458,7 +458,7 @@ if plot_s8 == True:
         t1 = datetime(time_gw[0].year, n+1, 1)
         width.append(0.8*(t1-t0).days)
 
-    ax6 = plt.subplot(6, 2, 11)
+    ax6 = plt.subplot(6, 2, (11, 12))
     ax6.bar(month_dswc, p_dswc_c*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
     ax6.set_ylabel('Occurrence of\nconditions\n(% of time)')
     ax6.set_ylim([0, 100])
@@ -466,34 +466,6 @@ if plot_s8 == True:
 
     l6, b6, w6, h6 = ax6.get_position().bounds
     ax6.set_position([l6, b6-0.02, w6, h6])
-
-    # (g) % time dswc (figure 5d)
-    csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
-    if not os.path.exists(csv_dswc):
-        raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
-                            Please create it first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
-    df = pd.read_csv(csv_dswc)
-    time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
-    f_dswc = df['f_dswc'].values
-    l_dswc_n = f_dswc >= 0.1
-
-    p_dswc = []
-    for n in range(time_dswc[0].month, time_dswc[-1].month):
-        l_time = [t.month == n for t in time_dswc]
-        p_dswc.append(np.sum(l_dswc_n[l_time])/np.sum(l_time))
-
-    p_dswc = np.array(p_dswc)
-        
-    ax7 = plt.subplot(6, 2, 12)
-    ax7.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
-    ax7.set_ylabel('Occurrence of\noutflows\n(% of time)')
-    ax7.yaxis.set_label_position("right")
-    ax7.yaxis.tick_right()
-    ax7.set_ylim([0, 100])
-    add_subtitle(ax7, '(g) Occurrence of outflows')
-
-    l7, b7, w7, h7 = ax7.get_position().bounds
-    ax7.set_position([l7, b7-0.02, w7, h7])
 
     log.info(f'Saving figure to: {output_dswc_conditions}')
     plt.savefig(output_dswc_conditions, bbox_inches='tight', dpi=300)
