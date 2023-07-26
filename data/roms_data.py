@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from matplotlib import path
 import numpy as np
 from netCDF4 import Dataset
-from datetime import datetime
+from datetime import datetime, timedelta
 import distutils.spawn
 import subprocess
 from scipy import spatial
@@ -373,6 +373,31 @@ def read_roms_data_from_multiple_netcdfs(input_dir:str, start_time:datetime, end
         sigma_t = np.concatenate((sigma_t, st))
 
     return RomsData(time, grid, u_east, v_north, temp, salt, density, sigma_t)
+
+def get_daily_means(time:np.ndarray, values:np.ndarray, time_axis=0) -> tuple:
+    daily_time = []
+    daily_values = []
+
+    n_days = (time[-1]-time[0]).days+1
+
+    for n in range(n_days):
+        start_date = datetime(time[0].year, time[0].month, time[0].day, 0, 0)+timedelta(days=n)
+        end_date = start_date+timedelta(days=1)
+        l_time = get_l_time_range(time, start_date, end_date)
+        daily_time.append(start_date)
+        daily_values.append(np.nanmean(values[l_time], axis=time_axis))
+
+    return np.array(daily_time), np.array(daily_values)
+
+def get_daily_mean_roms_data(roms_data:RomsData) -> RomsData:
+    time_d, u_east_d = get_daily_means(roms_data.time, roms_data.u_east)
+    _, v_north_d = get_daily_means(roms_data.time, roms_data.v_north)
+    _, temp_d = get_daily_means(roms_data.time, roms_data.temp)
+    _, salt_d = get_daily_means(roms_data.time, roms_data.salt)
+    _, density_d = get_daily_means(roms_data.time, roms_data.density)
+    _, sigma_t_d = get_daily_means(roms_data.time, roms_data.sigma_t)
+    
+    return RomsData(time_d, roms_data.grid, u_east_d, v_north_d, temp_d, salt_d, density_d, sigma_t_d)
 
 def get_eta_xi_along_transect(grid:RomsGrid, lon1:float, lat1:float,
                               lon2:float, lat2:float, ds:float) -> tuple:

@@ -3,16 +3,18 @@ from tools.files import get_dir_from_json
 from tools import log
 from data.bathymetry_data import BathymetryData
 from data.roms_data import read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
+from data.roms_data import get_daily_mean_roms_data, read_roms_data_from_multiple_netcdfs
 from data.climate_data import read_dmi_data, read_mei_data
 from data.kelp_data import KelpProbability
 from data.wind_data import WindData, read_era5_wind_data_from_netcdf, get_daily_mean_wind_data, convert_u_v_to_meteo_vel_dir
 from plot_tools.general import add_subtitle
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
-from plot_tools.plots_roms import plot_exceedance_threshold_velocity, plot_roms_map
+from plot_tools.plots_roms import plot_exceedance_threshold_velocity, plot_roms_map_with_transect, plot_roms_transect
 from plot_tools.plots_particles import plot_particle_density, _plot_age_in_deep_sea_cumulative_only
 from plot_tools.plots_climate import plot_dmi_index, plot_mei_index
 from particles import Particles, DensityGrid, get_particle_density
+from dswc_detector import calculate_potential_energy_anomaly, exclude_roms_data_past_depth
 from datetime import datetime, date
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -36,9 +38,9 @@ plot_s5 = False # pts sensitivity for logarithmic correction
 plot_s6 = False # exceedance of threshold velocity
 plot_s7 = False # pts sensitivity for threshold velocity
 plot_s8 = False # DSWC conditions timeseries
-plot_s9 = False # example transects for different phi values
+plot_s9 = True # example transects for different phi values
 # --- supporting results ---
-plot_s10 = True # plots that make up reef contributions
+plot_s10 = False # plots that make up reef contributions
 plot_s11 = False # export per release location
 plot_s12 = False # example shortest and longest tracks
 
@@ -288,6 +290,27 @@ if plot_s7 == True:
 # ---------------------------------------------------------------------------------
 # DSWC
 # ---------------------------------------------------------------------------------
+def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
+        if not os.path.exists(csv_gw):
+            raise ValueError(f'''Gravitational vs wind components file does not yet exist: {csv_gw}
+                                Please create it first by running write_gravitation_wind_components_to_csv (in dswc_detector.py)''')
+        df = pd.read_csv(csv_gw)
+        time_gw = [datetime.strptime(t, '%Y-%m-%d') for t in df['time'].values][:-1]
+        grav_c = df['grav_component'].values[:-1]
+        wind_c = df['wind_component'].values[:-1]
+        drhodx = df['drhodx'].values[:-1]
+        phi = df['phi'].values[:-1]
+        return time_gw, grav_c, wind_c, drhodx, phi
+    
+time_phi, _, _, _, phi = read_dswc_components()
+time_phi = np.array(time_phi)
+phi = np.array(phi)
+l_june = [t.month == 6 for t in time_phi]
+low_phi = np.nanmin(phi[l_june])
+date_low_phi = time_phi[l_june][np.where(phi[l_june] == low_phi)[0][0]]
+high_phi = np.nanmax(phi[l_june])
+date_high_phi = time_phi[l_june][np.where(phi[l_june] == high_phi)[0][0]]
+
 if plot_s8 == True:
     output_dswc_conditions = f'{plots_dir}figs8.jpg'
 
@@ -301,18 +324,6 @@ if plot_s8 == True:
     u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
     v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
     vel_mean, dir_mean = convert_u_v_to_meteo_vel_dir(u_mean, v_mean)
-
-    def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
-        if not os.path.exists(csv_gw):
-            raise ValueError(f'''Gravitational vs wind components file does not yet exist: {csv_gw}
-                                Please create it first by running write_gravitation_wind_components_to_csv (in dswc_detector.py)''')
-        df = pd.read_csv(csv_gw)
-        time_gw = [datetime.strptime(t, '%Y-%m-%d') for t in df['time'].values][:-1]
-        grav_c = df['grav_component'].values[:-1]
-        wind_c = df['wind_component'].values[:-1]
-        drhodx = df['drhodx'].values[:-1]
-        phi = df['phi'].values[:-1]
-        return time_gw, grav_c, wind_c, drhodx, phi
 
     def determine_l_time_dwswc_conditions(dir_mean):
         time, g, w, drhodx, phi = read_dswc_components()
@@ -365,6 +376,9 @@ if plot_s8 == True:
     ax2.fill_between(time_gw, ylim2[0], ylim2[1], where=l_phi, color=ocean_blue, alpha=0.3)
     ax2.set_ylim(ylim2)
     ax2.grid(True, linestyle='--', axis='x')
+    
+    ax2.plot(date_low_phi, low_phi, 'xk')
+    ax2.plot(date_high_phi, high_phi, 'xk')
 
     # (c) timeseries gravitational vs wind components
     gw_scale = 10**5
@@ -486,10 +500,84 @@ if plot_s8 == True:
     plt.close()
 
 if plot_s9 == True:
-    output_dswc_conditions = f'{plots_dir}figs8.jpg'
+    output_phi = f'{plots_dir}figs9.jpg'
     
-    log.info(f'Saving figure to: {output_dswc_conditions}')
-    plt.savefig(output_dswc_conditions, bbox_inches='tight', dpi=300)
+    location_info_perth = get_location_info('perth')
+    roms_high = read_roms_data_from_multiple_netcdfs(roms_dir, date_high_phi, date_high_phi,
+                                                     lon_range=location_info_perth.lon_range,
+                                                     lat_range=location_info_perth.lat_range)
+    roms_high = exclude_roms_data_past_depth(roms_high, 100)
+    roms_high = get_daily_mean_roms_data(roms_high)
+    roms_high.phi = calculate_potential_energy_anomaly(roms_high)
+    roms_low = read_roms_data_from_multiple_netcdfs(roms_dir, date_low_phi, date_low_phi,
+                                                     lon_range=location_info_perth.lon_range,
+                                                     lat_range=location_info_perth.lat_range)
+    roms_low = exclude_roms_data_past_depth(roms_low, 100)
+    roms_low = get_daily_mean_roms_data(roms_low)
+    roms_low.phi = calculate_potential_energy_anomaly(roms_low)
+    
+    lon1 = 115.70
+    lat1 = -31.76
+    lon2 = 115.35
+    lat2 = -31.90
+    ds = 100.
+    
+    fig = plt.figure(figsize=(14, 10))
+    plt.subplots_adjust(hspace=0.1, wspace=0.5)
+    
+    # (a) map low phi
+    ax1 = plt.subplot(2, 4, 1, projection=ccrs.PlateCarree())
+    ax1 = plot_basic_map(ax1, location_info_perth)
+    ax1.set_xticklabels([])
+    ax1, c1, cbar1, l1 = plot_roms_map_with_transect(roms_low, location_info_perth, lon1, lat1, lon2, lat2, ds,
+                                      'phi', date_low_phi, ax=ax1, show=False,
+                                      vmin=0, vmax=20, cmap=cmocean.cm.deep)
+    ax1.set_title('')
+    cbar1.remove()
+    l1, b1, w1, h1 = ax1.get_position().bounds
+    cbax1 = fig.add_axes([l1-0.07, b1, 0.02, h1])
+    cbar1 = plt.colorbar(c1, cax=cbax1)
+    cbar1.set_label('Potential energy anomaly (J m$^{-3}$)', labelpad=-70)
+    cbar1.ax.yaxis.set_ticks_position('left')
+    
+    add_subtitle(ax1, f'(a) PEA {date_low_phi.strftime("%d %B %Y")}\n      $\phi = {np.round(low_phi, 1)}$')
+    
+    # (b) transect low phi
+    ax2 = plt.subplot(2, 4, (2, 4))
+    ax2 = plot_roms_transect(roms_low, lon1, lat1, lon2, lat2, ds, 'temp', date_low_phi,
+                             ax=ax2, show=False, clabel='Temperature ($^o$C)',
+                             vmin=20, vmax=22)
+    ax2.set_xticklabels([])
+    ax2.set_xlabel('')
+    add_subtitle(ax2, f'(b) Temperature along transect {date_low_phi.strftime("%d %B %Y")}')
+    
+    # (c) map high phi
+    ax3 = plt.subplot(2, 4, 5, projection=ccrs.PlateCarree())
+    ax3 = plot_basic_map(ax3, location_info_perth)
+    ax3, c3, cbar3, l3 = plot_roms_map_with_transect(roms_high, location_info_perth, lon1, lat1, lon2, lat2, ds,
+                                      'phi', date_high_phi, ax=ax3, show=False,
+                                      vmin=0, vmax=20, cmap=cmocean.cm.deep)
+    ax3.set_title('')
+    l3.remove()
+    cbar3.remove()
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    cbax3 = fig.add_axes([l3-0.07, b3, 0.02, h3])
+    cbar3 = plt.colorbar(c3, cax=cbax3)
+    cbar3.set_label('Potential energy anomaly (J m$^{-3}$)', labelpad=-70)
+    cbar3.ax.yaxis.set_ticks_position('left')
+    
+    add_subtitle(ax3, f'(c) PEA {date_high_phi.strftime("%d %B %Y")}\n      $\phi = {np.round(high_phi, 1)}$')
+    
+    # (d) transect high phi
+    ax4 = plt.subplot(2, 4, (6, 8))
+    ax4 = plot_roms_transect(roms_high, lon1, lat1, lon2, lat2, ds, 'temp', date_high_phi,
+                             ax=ax4, show=False, clabel='Temperature ($^o$C)',
+                             vmin=20, vmax=22)
+    add_subtitle(ax4, f'(d) Temperature along transect {date_high_phi.strftime("%d %B %Y")}')
+    
+    
+    log.info(f'Saving figure to: {output_phi}')
+    plt.savefig(output_phi, bbox_inches='tight', dpi=300)
     plt.close()
     
 # ---------------------------------------------------------------------------------

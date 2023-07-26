@@ -147,7 +147,7 @@ def plot_roms_map(roms_data:RomsData, location_info:LocationInfo,
     if show is True:
         plt.show()
     else:
-        return ax
+        return ax, c, cbar
 
 def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
                                 lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
@@ -163,10 +163,10 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
     lon = roms_data.grid.lon[eta, xi]
     lat = roms_data.grid.lat[eta, xi]
 
-    ax = plot_roms_map(roms_data, location_info, parameter, time, s=s, ax=ax, show=False, cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
+    ax, c, cbar = plot_roms_map(roms_data, location_info, parameter, time, s=s, ax=ax, show=False, cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
     ax.plot(lon, lat, '-', color=color, label='Transect')
 
-    ax.legend(loc='upper left')
+    l = ax.legend(loc='lower right')
 
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
@@ -175,7 +175,7 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
     if show is True:
         plt.show()
     else:
-        return ax
+        return ax, c, cbar, l
 
 def plot_roms_transect(roms_data:RomsData,
                        lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
