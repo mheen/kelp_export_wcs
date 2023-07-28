@@ -5,6 +5,7 @@ input/dirs.json
 test*
 temp_*
 *.jpg
+plots/*
 
 .vscode/*
 
