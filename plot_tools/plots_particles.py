@@ -23,6 +23,7 @@ from warnings import warn
 import numpy as np
 from datetime import date, datetime, timedelta
 import cmocean
+import pandas as pd
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
@@ -288,13 +289,14 @@ def _plot_age_in_deep_sea_cumulative_only(ax, particles:Particles, h_deep_sea:fl
 
     ax.plot(age_arriving_ds, f_cumulative_per_age, color=color, linestyle=linestyle, label=label)
 
-    return ax
+    return ax, age_arriving_ds, f_cumulative_per_age
 
 def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
                                                      h_deep_sea_sensitivity=[200, 400, 600, 800, 1000, 2500, 5000],
                                                      colors = ['#1b7931', '#1c642a', '#1a5023', '#183d1d', '#142a16', '#0e190e', '#000000'],
                                                      linestyles = ['--', ':', '-', '-.', '--', ':', '-'],
-                                                     output_path=None, show=True, ax=None) -> plt.axes:
+                                                     output_path=None, show=True, ax=None,
+                                                     output_path_csv=None) -> plt.axes:
     
     labels = h_deep_sea_sensitivity
 
@@ -302,7 +304,13 @@ def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
         fig = plt.figure(figsize=(10, 5))
         ax = plt.axes()
     for i, h in enumerate(h_deep_sea_sensitivity):
-        ax = _plot_age_in_deep_sea_cumulative_only(ax, particles, h, color=colors[i], linestyle=linestyles[i], label=labels[i])
+        ax, age, f = _plot_age_in_deep_sea_cumulative_only(ax, particles, h, color=colors[i], linestyle=linestyles[i], label=labels[i])
+        
+        if i == 0:
+            df = pd.DataFrame(np.array([age, f]).transpose(), columns=['age (days)', f'fraction past {h}'])
+        else:
+            df[f'fraction past {h}'] = f
+
     ax.set_xlim([0, 150])
     ax.set_xlabel('Particle age (days)')
     ax.set_ylim([0, 100])
@@ -314,6 +322,9 @@ def plot_particle_age_in_deep_sea_depending_on_depth(particles:Particles,
     if output_path is not None:
         log.info(f'Saving figure to: {output_path}')
         plt.savefig(output_path, bbox_inches='tight', dpi=300)
+
+    if output_path_csv is not None:
+        df.to_csv(output_path_csv, index=False)
 
     if show is True:
         plt.show()

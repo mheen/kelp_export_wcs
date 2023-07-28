@@ -335,6 +335,13 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
             linestyles=['-', '--', ':', '-.', '--'],
             show=True, output_path=None):
     
+    if output_path is not None:
+        output_path_csv_p = f'{os.path.splitext(output_path)[0]}a.csv'
+        output_path_csv_d = f'{os.path.splitext(output_path)[0]}b.csv'
+    else:
+        output_path_csv_p = None
+        output_path_csv_d = None
+    
     fig = plt.figure(figsize=(11, 6))
     
     xlim = [0, 120]
@@ -344,7 +351,8 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
     ax1, l1 = plot_particle_age_in_deep_sea_depending_on_depth(particles, h_deep_sea_sensitivity=h_deep_seas,
                                                                linestyles=linestyles,
                                                                colors=colors,
-                                                               ax=ax1, show=False)
+                                                               ax=ax1, show=False,
+                                                               output_path_csv=output_path_csv_p)
     ax1.set_ylabel('Particles past depth range (%)')
     ax1.set_xlim(xlim)
     ax1.set_ylim([0, 70])
@@ -365,6 +373,12 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
 
         ax2.plot(age_arriving_ds, f_decomposed, color=colors[i], linestyle=linestyles[i], label=h_deep_sea)
         
+        if i == 0:
+            df = pd.DataFrame(np.array([age_arriving_ds, f_decomposed]).transpose(),
+                              columns=['age (days)', f'fraction past {h_deep_sea}'])
+        else:
+            df[f'fraction past {h_deep_sea}'] = f_decomposed
+        
         if h_deep_sea == 200:
             n_deep_sea_decomposed_min = n_deep_sea_per_age*np.exp((k-k_sd)*age_arriving_ds)
             n_deep_sea_decomposed_max = n_deep_sea_per_age*np.exp((k+k_sd)*age_arriving_ds)
@@ -372,7 +386,10 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
             f_decomposed_max = np.cumsum(n_deep_sea_decomposed_max/total_particles*100)
             ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=colors[i], alpha=0.5)
             print(f'Final percentage past shelf accounting for decomposition: minimum {f_decomposed_min[-1]}, mean {f_decomposed[-1]}, maximum {f_decomposed_max[-1]}')
-        
+    
+    if output_path_csv_d is not None:
+        df.to_csv(output_path_csv_d, index=False)
+     
     ax2.set_xlabel('Particle age (days)')
     ax2.set_ylabel('Particles past depth range\naccounting for decomposition (%)')
     ax2.set_ylim([0, 50])
@@ -634,10 +651,10 @@ if __name__ == '__main__':
     
     # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
-    # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
+    figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
     # # percentages past shelf:
     # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
-    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
+    # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
