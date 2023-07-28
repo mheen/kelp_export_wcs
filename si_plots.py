@@ -2,15 +2,17 @@ from location_info import get_location_info, LocationInfo
 from tools.files import get_dir_from_json
 from tools import log
 from data.bathymetry_data import BathymetryData
-from data.roms_data import read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
+from data.roms_data import RomsData, read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
 from data.roms_data import get_daily_mean_roms_data, read_roms_data_from_multiple_netcdfs
 from data.climate_data import read_dmi_data, read_mei_data
 from data.kelp_data import KelpProbability
 from data.wind_data import WindData, read_era5_wind_data_from_netcdf, get_daily_mean_wind_data, convert_u_v_to_meteo_vel_dir
+from data.glider_data import GliderData
 from plot_tools.general import add_subtitle
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.plots_bathymetry import plot_contours
-from plot_tools.plots_roms import plot_exceedance_threshold_velocity, plot_roms_map_with_transect, plot_roms_transect
+from plot_tools.plots_roms import plot_exceedance_threshold_velocity, plot_roms_map_with_transect, plot_roms_map
+from plot_tools.plots_roms import plot_roms_transect_specific_coordinates, plot_roms_transect_between_points
 from plot_tools.plots_particles import plot_particle_density, _plot_age_in_deep_sea_cumulative_only
 from plot_tools.plots_climate import plot_dmi_index, plot_mei_index
 from particles import Particles, DensityGrid, get_particle_density
@@ -31,13 +33,13 @@ import os
 # ---------------------------------------------------------------------------------
 # --- supporting methods ---
 plot_s1 = False # climate indices
-plot_s2 = False # ROMS DSWC validation with 2017 gliders
+plot_s2 = True # ROMS DSWC 2022 example with glider
 plot_s3 = False # ROMS horizontal resolution and bottom layer thickness
 plot_s4 = False # logarithmic profiles and correction factor
 plot_s5 = False # pts sensitivity for logarithmic correction
 plot_s6 = False # exceedance of threshold velocity
 plot_s7 = False # pts sensitivity for threshold velocity
-plot_s8 = True # DSWC conditions timeseries
+plot_s8 = False # DSWC conditions timeseries
 plot_s9 = False # example transects for different phi values
 # --- supporting results ---
 plot_s10 = False # plots that make up reef contributions
@@ -98,6 +100,96 @@ if plot_s1 == True:
 
     log.info(f'Saving figure to: {output_path}')
     plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close()
+
+# ---------------------------------------------------------------------------------
+# GLIDERS VS ROMS
+# ---------------------------------------------------------------------------------
+if plot_s2 == True:
+    output_gliders = f'{plots_dir}figs2.jpg'
+    
+    location_info_pw = get_location_info('perth_wider')
+    
+    glider_all = GliderData.read_from_netcdf(f'{get_dir_from_json("glider_data")}IMOS_ANFOG_BCEOPSTUV_20220628T064224Z_SL286_FV01_timeseries_END-20220712T082641Z.nc')
+    start_glider = datetime(2022, 6, 30, 22, 30)
+    end_glider = datetime(2022, 7, 2, 8, 0)
+    glider = glider_all.get_data_in_time_frame(start_glider, end_glider)
+    l_nonan = np.logical_and(~np.isnan(glider.lon), ~np.isnan(glider.lat))
+    glider_lon = glider.lon[l_nonan]
+    glider_lat = glider.lat[l_nonan]
+    
+    roms_day = datetime(2022, 7, 2)
+    roms = read_roms_data_from_multiple_netcdfs(f'{get_dir_from_json("roms_data")}2022/', roms_day, roms_day,
+                                                lon_range=location_info_pw.lon_range,
+                                                lat_range=location_info_pw.lat_range)
+    roms = get_daily_mean_roms_data(roms)
+    
+    fig = plt.figure(figsize=(12, 8))
+    plt.subplots_adjust(wspace=1.8)
+    
+    vmin = 20.
+    vmax = 22.
+    
+    # (a) Map with transects and ROMS bottom temp
+    ax3 = plt.subplot(3, 5, (1, 12), projection=ccrs.PlateCarree())
+    ax3 = plot_basic_map(ax3, location_info_pw, ymarkers='right')
+    ax3, c3, cbar3 = plot_roms_map(roms, location_info_pw, 'temp', roms_day, s=0, ax=ax3, show=False, vmin=vmin, vmax=vmax)
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
+                        ax=ax3, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    ax3.plot(glider_lon, glider_lat, '.', color='#808080', label='Ocean glider transect')
+    eta, xi = roms_grid.get_eta_xi_of_lon_lat_point(glider_lon, glider_lat)
+    ax3.plot(roms_grid.lon[eta, xi], roms_grid.lat[eta, xi], '-', color='#808080', label='CWA-ROMS transect')
+    l3 = ax3.legend(loc='lower right')
+    
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    
+    ax3.set_title('')
+    add_subtitle(ax3, f'(a) CWA-ROMS bottom temperature')
+    
+    # (b) July 2022 glider transect temperature
+    depth_ticks = [-100, -50, 0]
+    depth_ticklabels = [100, 50, 0]
+
+    ax1 = plt.subplot(3, 5, (8, 10))
+    ax1, c1, cbar1 = glider.plot_transect(parameter='temp', ax=ax1, show=False,
+                                          vmin=vmin, vmax=vmax)
+    ax1.set_yticks(depth_ticks)
+    ax1.set_yticklabels(depth_ticklabels)
+    ax1.set_xlabel('')
+    
+    cbar1.remove()
+    l1, b1, w1, h1 = ax1.get_position().bounds
+    
+    add_subtitle(ax1, f'(b) Ocean glider temperatures: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
+                 location='lower right')
+    
+    # (c) July 2022 ROMS transect temperature
+    ax2 = plt.subplot(3, 5, (13, 15))
+    ax2, c2, cbar2 = plot_roms_transect_specific_coordinates(roms, glider_lon, glider_lat,
+                                                             'temp', roms_day,
+                                                             ax=ax2, show=False, vmin=vmin, vmax=vmax)
+    ax2.set_yticks(depth_ticks)
+    ax2.set_yticklabels(depth_ticklabels)
+    
+    cbar2.remove()
+    l2, b2, w2, h2 = ax2.get_position().bounds
+    
+    add_subtitle(ax2, f'(c) CWA-ROMS temperatures: {roms_day.strftime("%d %b %Y")}', location='lower right')
+    
+    # add colorbar to ax3    
+    cbar3.remove()
+    cbax3 = fig.add_axes([l3-0.03, b2, 0.02, 1.25*h3])
+    cbar3 = plt.colorbar(c3, cax=cbax3)
+    cbar3.set_label('Temperature ($^o$C)', labelpad=-70)
+    cbar3.ax.yaxis.set_ticks_position('left')
+    
+    # move ax3
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    ax3.set_position([l3, b2, w3, h3])
+    
+    log.info(f'Saving figure to: {output_gliders}')
+    plt.savefig(output_gliders, bbox_inches='tight', dpi=300)
     plt.close()
 
 # ---------------------------------------------------------------------------------
@@ -516,7 +608,7 @@ if plot_s9 == True:
     
     # (b) transect low phi
     ax2 = plt.subplot(2, 4, (2, 4))
-    ax2 = plot_roms_transect(roms_low, lon1, lat1, lon2, lat2, ds, 'temp', date_low_phi,
+    ax2, c2, cbar2 = plot_roms_transect_between_points(roms_low, lon1, lat1, lon2, lat2, ds, 'temp', date_low_phi,
                              ax=ax2, show=False, clabel='Temperature ($^o$C)',
                              vmin=20, vmax=22)
     ax2.set_xticklabels([])
@@ -542,7 +634,7 @@ if plot_s9 == True:
     
     # (d) transect high phi
     ax4 = plt.subplot(2, 4, (6, 8))
-    ax4 = plot_roms_transect(roms_high, lon1, lat1, lon2, lat2, ds, 'temp', date_high_phi,
+    ax4, c4, cbar4 = plot_roms_transect_between_points(roms_high, lon1, lat1, lon2, lat2, ds, 'temp', date_high_phi,
                              ax=ax4, show=False, clabel='Temperature ($^o$C)',
                              vmin=20, vmax=22)
     add_subtitle(ax4, f'(d) Temperature along transect {date_high_phi.strftime("%d %B %Y")}')
