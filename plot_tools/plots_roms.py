@@ -177,13 +177,10 @@ def plot_roms_map_with_transect(roms_data:RomsData, location_info:LocationInfo,
     else:
         return ax, c, cbar, l
 
-def plot_roms_transect(roms_data:RomsData,
-                       lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
+def plot_roms_transect(roms_data:RomsData, eta:np.ndarray, xi:np.ndarray,
                        parameter:str, time:datetime,
                        ax=None, show=True, output_path=None,
                        cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
-    
-    eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
 
     lon = roms_data.grid.lon[eta, xi]
     lat = roms_data.grid.lat[eta, xi]
@@ -209,15 +206,26 @@ def plot_roms_transect(roms_data:RomsData,
     else:
         raise ValueError(f'Unknown parameter {parameter} in RomsData to plot transect')
 
+    x_label = 'Distance along transect (km)'
+    values = values.transpose()
+    if all(lon[~np.isnan(lon)] < 130.): # in WA: so flip transect horizontally to show coast on the east
+        values = np.fliplr(values)
+        h = np.flip(np.copy(h))
+        z = np.fliplr(np.copy(z)) # needed because z coordinates vary per location (unlike with the glider data)
+        x_label = '$\leftarrow$ Distance along transect (km)'
+
     if ax is None:
         fig = plt.figure(figsize=(8, 3))
         ax = plt.axes()
     distance2d = np.repeat(distance[np.newaxis, :], z.shape[0], axis=0)
-    c = ax.pcolormesh(distance2d, z, values.transpose(), cmap=cmap, vmin=vmin, vmax=vmax)
+    c = ax.pcolormesh(distance2d, z, values, cmap=cmap, vmin=vmin, vmax=vmax)
     ax.fill_between(distance, -h, np.nanmin(z), edgecolor='k', facecolor='#989898') # ROMS bottom
     
-    ax.set_xlabel('Distance along transect (km)')
+    ax.set_xlabel(x_label)
     ax.set_xlim([0, np.nanmax(distance)])
+    if all(lon[~np.isnan(lon)] < 130.):
+        x_ticklabels = ax.get_xticklabels()
+        ax.set_xticklabels(x_ticklabels[::-1])
     ax.set_ylabel('Depth (m)')
     ax.set_ylim([np.nanmin(z), 0])
     
@@ -231,7 +239,30 @@ def plot_roms_transect(roms_data:RomsData,
     if show is True:
         plt.show()
     else:
-        return ax
+        return ax, c, cbar
+
+def plot_roms_transect_specific_coordinates(roms_data:RomsData,
+                                            transect_lons:np.ndarray, transect_lats:np.ndarray,
+                                            parameter:str, time:datetime,
+                                            ax=None, show=True, output_path=None,
+                                            cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
+    eta, xi = roms_data.grid.get_eta_xi_of_lon_lat_point(transect_lons, transect_lats)
+    ax, c, cbar = plot_roms_transect(roms_data, eta, xi, parameter, time, ax=ax, show=show, output_path=output_path,
+                       cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
+    return ax, c, cbar
+    
+def plot_roms_transect_between_points(roms_data:RomsData,
+                                     lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
+                                     parameter:str, time:datetime,
+                                     ax=None, show=True, output_path=None,
+                                     cmap='RdBu_r', clabel='', vmin=None, vmax=None) -> plt.axes:
+    
+    eta, xi = get_eta_xi_along_transect(roms_data.grid, lon1, lat1, lon2, lat2, ds)
+    ax, c, cbar = plot_roms_transect(roms_data, eta, xi, parameter, time, ax=ax, show=show, output_path=output_path,
+                       cmap=cmap, clabel=clabel, vmin=vmin, vmax=vmax)
+    return ax, c, cbar
+
+    
 
 def animate_roms_transect(roms_data:RomsData,
                           lon1:float, lat1:float, lon2:float, lat2:float, ds:float,
