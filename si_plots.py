@@ -32,8 +32,8 @@ import os
 # USER INPUT
 # ---------------------------------------------------------------------------------
 # --- supporting methods ---
-plot_s1 = False # climate indices
-plot_s2 = True # ROMS DSWC 2022 example with glider
+plot_s1 = False # ROMS DSWC 2022 example with glider
+plot_s2 = False # climate indices
 plot_s3 = False # ROMS horizontal resolution and bottom layer thickness
 plot_s4 = False # logarithmic profiles and correction factor
 plot_s5 = False # pts sensitivity for logarithmic correction
@@ -72,11 +72,11 @@ roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 # ---------------------------------------------------------------------------------
 # CLIMATE INDICES
 # ---------------------------------------------------------------------------------
-if plot_s1 == True:
+if plot_s2 == True:
     time_mei, mei = read_mei_data()
     time_dmi, dmi = read_dmi_data()
 
-    output_path = f'{plots_dir}figs1.jpg'
+    output_path = f'{plots_dir}figs2.jpg'
     xlim = [datetime(2000, 1, 1), datetime(2023, 1, 1)]
 
     fig = plt.figure(figsize=(10, 10))
@@ -105,8 +105,8 @@ if plot_s1 == True:
 # ---------------------------------------------------------------------------------
 # GLIDERS VS ROMS
 # ---------------------------------------------------------------------------------
-if plot_s2 == True:
-    output_gliders = f'{plots_dir}figs2.jpg'
+if plot_s1 == True:
+    output_gliders = f'{plots_dir}figs1.jpg'
     
     location_info_pw = get_location_info('perth_wider')
     
