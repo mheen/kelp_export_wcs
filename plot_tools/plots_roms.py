@@ -208,11 +208,6 @@ def plot_roms_transect(roms_data:RomsData, eta:np.ndarray, xi:np.ndarray,
 
     x_label = 'Distance along transect (km)'
     values = values.transpose()
-    if all(lon[~np.isnan(lon)] < 130.): # in WA: so flip transect horizontally to show coast on the east
-        values = np.fliplr(values)
-        h = np.flip(np.copy(h))
-        z = np.fliplr(np.copy(z)) # needed because z coordinates vary per location (unlike with the glider data)
-        x_label = '$\leftarrow$ Distance along transect (km)'
 
     if ax is None:
         fig = plt.figure(figsize=(8, 3))
@@ -221,11 +216,12 @@ def plot_roms_transect(roms_data:RomsData, eta:np.ndarray, xi:np.ndarray,
     c = ax.pcolormesh(distance2d, z, values, cmap=cmap, vmin=vmin, vmax=vmax)
     ax.fill_between(distance, -h, np.nanmin(z), edgecolor='k', facecolor='#989898') # ROMS bottom
     
-    ax.set_xlabel(x_label)
+    
     ax.set_xlim([0, np.nanmax(distance)])
     if all(lon[~np.isnan(lon)] < 130.):
-        x_ticklabels = ax.get_xticklabels()
-        ax.set_xticklabels(x_ticklabels[::-1])
+        ax.invert_xaxis()
+        x_label = '$\leftarrow$ Distance along transect (km)'
+    ax.set_xlabel(x_label)
     ax.set_ylabel('Depth (m)')
     ax.set_ylim([np.nanmin(z), 0])
     
