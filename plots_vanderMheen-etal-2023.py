@@ -453,7 +453,7 @@ def figure5(particles:Particles, h_deep_sea=200,
     fig = plt.figure(figsize=(8, 5))
     plt.subplots_adjust(hspace=0.3, wspace=0.3)
     
-    # (a) histogram decomposed particles passing shelf2
+    # (a) histogram decomposed particles passing shelf
     t_release = particles.get_release_time_index()
     p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
     
@@ -494,37 +494,77 @@ def figure5(particles:Particles, h_deep_sea=200,
     ax2.set_ylabel('Particles released (%)')
     ax2.set_ylim([0, 27])
     
+    # season texts
+    ax1.text(0.5/8, -0.1, 'Bunuru', ha='center', color=season_color, transform=ax1.transAxes)
+    ax1.text(2.5/8, -0.1, 'Djeran', ha='center', color=season_color, transform=ax1.transAxes)
+    ax1.text(4.5/8, -0.1, 'Makuru', ha='center', color=season_color, transform=ax1.transAxes)
+    ax1.text(6.8/8, -0.1, 'Djilba', ha='center', color=season_color, transform=ax1.transAxes)
+    
     # (b) histogram dswc occurrence
-    csv_dswc = 'temp_data/fraction_cells_dswc_in_time.csv'
-    if not os.path.exists(csv_dswc):
-        raise ValueError(f'''DSWC occurrence file does not yet exist: {csv_dswc}
-                         Please create it first by running write_fraction_cells_dswc_in_time_to_csv (in dswc_detector.py)''')
-    df = pd.read_csv(csv_dswc)
-    time_dswc = [datetime.strptime(t, '%Y-%m-%d %H:%M:%S') for t in df['time'].values]
-    f_dswc = df['f_dswc'].values
-    l_dswc = f_dswc >= 0.1
+    start_date = datetime(2017, 3, 1)
+    end_date = datetime(2017, 9, 30)
+    location_info_perth = get_location_info('perth')
+    wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
+                                                lon_range=location_info_perth.lon_range,
+                                                lat_range=location_info_perth.lat_range)
+    wind_data = get_daily_mean_wind_data(wind_data)
+    u_mean = np.nanmean(np.nanmean(wind_data.u, axis=1), axis=1)
+    v_mean = np.nanmean(np.nanmean(wind_data.v, axis=1), axis=1)
+    vel_mean, dir_mean = convert_u_v_to_meteo_vel_dir(u_mean, v_mean)
+
+    def read_dswc_components(csv_gw='temp_data/gravitational_wind_components_in_time.csv'):
+        if not os.path.exists(csv_gw):
+            raise ValueError(f'''Gravitational vs wind components file does not yet exist: {csv_gw}
+                                Please create it first by running write_gravitation_wind_components_to_csv (in dswc_detector.py)''')
+        df = pd.read_csv(csv_gw)
+        time_gw = [datetime.strptime(t, '%Y-%m-%d') for t in df['time'].values][:-1]
+        grav_c = df['grav_component'].values[:-1]
+        wind_c = df['wind_component'].values[:-1]
+        drhodx = df['drhodx'].values[:-1]
+        phi = df['phi'].values[:-1]
+        return time_gw, grav_c, wind_c, drhodx, phi
+
+    def determine_l_time_dwswc_conditions(dir_mean):
+        time, g, w, drhodx, phi = read_dswc_components()
+        l_drhodx = drhodx < 0
+        l_phi = phi > 5
+        l_prereq = np.logical_and(l_drhodx, l_phi)
+        l_components = g > w
+        l_onshore = np.logical_and(225 < dir_mean, dir_mean < 315)
+        l_wind = np.logical_or(l_components, l_onshore)
+        l_dswc = np.logical_and(l_prereq, l_components)
+        return l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc
+        
+    time_gw, grav_c, wind_c, drhodx, phi = read_dswc_components()
+    l_drhodx, l_phi, l_components, l_wind, l_onshore, l_dswc = determine_l_time_dwswc_conditions(dir_mean)
     
     month_dswc = []
     p_dswc = []
-    for n in range(time_dswc[0].month, time_dswc[-1].month):
-        l_time = [t.month == n for t in time_dswc]
-        month_dswc.append(datetime(time_dswc[0].year, n, 1))
+    for n in range(time_gw[0].month, time_gw[-1].month+1):
+        l_time = [t.month == n for t in time_gw]
+        month_dswc.append(datetime(time_gw[0].year, n, 1))
         p_dswc.append(np.sum(l_dswc[l_time])/np.sum(l_time))
-    
-    p_dswc = np.array(p_dswc)
+        
     month_dswc = np.array(month_dswc)
     str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
+    p_dswc = np.array(p_dswc)
         
     ax4 = plt.subplot(1, 2, 2)
     ax4.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
-    ax4.set_ylabel('Occurrence of\ndense shelf water outflows\n(% of time)')
+    ax4.set_ylabel('Occurrence of suitable conditions for\ndense shelf water transport\n(% of time)')
     ax4.yaxis.set_label_position("right")
     ax4.yaxis.tick_right()
     ax4.set_ylim([0, 100])
     ax4.spines['left'].set_color(ocean_blue)
     ax4.tick_params(axis='y', colors=ocean_blue)
     ax4.yaxis.label.set_color(ocean_blue)
-    add_subtitle(ax4, '(b) Dense shelf water outflows')
+    add_subtitle(ax4, '(b) Dense shelf water transport')
+    
+    # season texts
+    ax4.text(0.5/8, -0.1, 'Bunuru', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(2.5/8, -0.1, 'Djeran', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(4.5/8, -0.1, 'Makuru', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(6.8/8, -0.1, 'Djilba', ha='center', color=season_color, transform=ax4.transAxes)
 
     if show is True:
         plt.show()
@@ -683,10 +723,10 @@ if __name__ == '__main__':
 
     # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
-    figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
+    # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
-    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    # particles = Particles.read_from_netcdf(particle_path)
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particles = Particles.read_from_netcdf(particle_path)
     
     # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
@@ -694,6 +734,6 @@ if __name__ == '__main__':
     # # percentages past shelf:
     # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
-    # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
+    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
     # figure6(particles, output_path='fig6.jpg', show=False)
