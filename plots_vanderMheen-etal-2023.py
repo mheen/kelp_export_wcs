@@ -4,7 +4,7 @@ from tools.timeseries import add_month_to_time, convert_datetime_to_time
 from tools.coordinates import get_index_closest_point
 from data.kelp_data import KelpProbability
 from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs, get_subgrid
-from data.roms_data import get_cross_shelf_velocity_component, get_eta_xi_along_depth_contour
+from data.roms_data import get_cross_shelf_velocity_component, get_along_shelf_velocity_component, get_eta_xi_along_depth_contour
 from data.roms_data import get_lon_lat_along_depth_contour, get_distance_along_transect
 from data.glider_data import GliderData
 from data.satellite_data import SatelliteSST, read_satellite_sst_from_netcdf
@@ -41,6 +41,7 @@ formatter = mdates.ConciseDateFormatter(locator)
 
 kelp_green = '#1b7931'
 ocean_blue = '#25419e'
+season_color = '#4f5478'
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 
@@ -57,6 +58,7 @@ def save_bottom_cross_shelf_velocities(location_name='perth_wide',
     n_months = 12
     time_monthly = []
     u_cross_monthly_spatial = []
+    v_along_monthly_spatial = []
     for n in range(n_months):
         start_date = add_month_to_time(date0, n)
         end_date = add_month_to_time(date0, n+1)-timedelta(days=1)
@@ -64,13 +66,18 @@ def save_bottom_cross_shelf_velocities(location_name='perth_wide',
                                                     lon_range=location_info.lon_range,
                                                     lat_range=location_info.lat_range)
         u_cross = get_cross_shelf_velocity_component(roms)
+        v_along = get_along_shelf_velocity_component(roms)
         eta, xi = get_eta_xi_along_depth_contour(roms.grid, h_level=h_level)
         # monthly means
         time_monthly.append(start_date)
         u_cross_monthly_spatial.append(np.nanmean(np.nanmean(u_cross[:, 0:max_s_layer, eta, xi], axis=0), axis=0))
+        v_along_monthly_spatial.append(np.nanmean(np.nanmean(v_along[:, 0:max_s_layer, eta, xi], axis=1), axis=0))
 
     df_s = pd.DataFrame(np.array(u_cross_monthly_spatial).transpose(), columns=time_monthly)
     df_s.to_csv(f'temp_data/{location_name}_monthly_mean_u_cross_{h_level}m.csv', index=False)
+    
+    df_sv = pd.DataFrame(np.array(v_along_monthly_spatial).transpose(), columns=time_monthly)
+    df_sv.to_csv(f'temp_data/{location_name}_monthly_mean_v_along_{h_level}m.csv', index=False)
 
 def save_distance_along_depth_contour(location_name='perth_wide', h_level=100):
     location_info = get_location_info(location_name)
@@ -86,7 +93,7 @@ def save_distance_along_depth_contour(location_name='perth_wide', h_level=100):
 def figure1(show=True, output_path=None):
 
     fig = plt.figure(figsize=(12, 8))
-    plt.subplots_adjust(wspace=0.35)
+    plt.subplots_adjust(wspace=0.5)
 
     # (a) kelp probability map
     location_info_p = get_location_info('perth')
@@ -100,14 +107,14 @@ def figure1(show=True, output_path=None):
     cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
     cbar1 = plt.colorbar(c1, cax=cbax1)
     cbar1.set_label('Probability of kelp')
-    add_subtitle(ax1, '(a) Perth kelp reefs')
+    add_subtitle(ax1, '(a) Perth kelp forests')
 
     # (c) bathymetry and oceanography overview
-    location_info_pw = get_location_info('perth_wide')
+    location_info_pw_mc = get_location_info('perth_wide_more_contours')
     ax3 = plt.subplot(3, 3, (2, 6), projection=ccrs.PlateCarree())
-    ax3 = plot_basic_map(ax3, location_info_pw, ymarkers='off')
-    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_pw, ax=ax3, show=False, show_perth_canyon=True, color='k', linewidths=0.7)
-    c3 = ax3.pcolormesh(roms_grid.lon, roms_grid.lat, roms_grid.h, vmin=0, vmax=4000, cmap=cmocean.cm.deep)
+    ax3 = plot_basic_map(ax3, location_info_pw_mc, ymarkers='off')
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_pw_mc, ax=ax3, show=False, show_perth_canyon=True, color='k', linewidths=0.7)
+    c3 = ax3.pcolormesh(roms_grid.lon, roms_grid.lat, roms_grid.h, vmin=0, vmax=2000, cmap=cmocean.cm.deep)
     l3, b3, w3, h3 = ax3.get_position().bounds
     cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
     cbar3 = plt.colorbar(c3, cax=cbax3)
@@ -128,15 +135,24 @@ def figure1(show=True, output_path=None):
     l2, b2, w2, h2 = ax2.get_position().bounds
     ax2.set_position([l1, b2, w1+0.03, h2])
 
-    # (c) cross-shore transport histogram
+    # (d) cross-shore transport histogram
     csv_ucross = 'temp_data/perth_wide_monthly_mean_u_cross_100m.csv'
     if not os.path.exists(csv_ucross):
         raise ValueError(f'''Mean cross-shelf velocity file does not yet exist: {csv_ucross}
-                         Please create is first by running save_bottom_cross_shelf_velocities''')
+                         Please create it first by running save_bottom_cross_shelf_velocities''')
     df = pd.read_csv(csv_ucross)
     time_cross = [datetime.strptime(d, '%Y-%m-%d') for d in df.columns.values]
     str_time_cross = [d.strftime('%b') for d in time_cross]
-    ucross = [np.nanmean(df.iloc[:, i].values) for i in range(len(df.columns))]
+    ucross = -np.array([np.nanmean(df.iloc[:, i].values) for i in range(len(df.columns))])
+    # minus sign so cross-shelf velocity follows oceanographic conventions again
+    # ucross is calculated as perpendicular to a depth contour, and the depth contour axis points offshore
+
+    csv_valong = 'temp_data/perth_wide_monthly_mean_v_along_100m.csv'
+    if not os.path.exists(csv_valong):
+        raise ValueError(f'''Mean along-shelf velocity file does not yet exist: {csv_valong}
+                         Please create it first by running save_bottom_cross_shelf_velocities''')
+    df_v = pd.read_csv(csv_valong)
+    valong = [np.nanmean(df_v.iloc[:, i].values) for i in range(len(df_v.columns))]
 
     ax4 = plt.subplot(3, 3, (8, 9))
     ax4.bar(np.arange(len(time_cross)), ucross, color=ocean_blue, tick_label=str_time_cross)
@@ -144,12 +160,35 @@ def figure1(show=True, output_path=None):
     ax4.plot([-1, 12], [0, 0], '-k')
     ax4.set_xlim(xlim)
     ax4.set_ylim([-0.05, 0.05])
-    ax4.set_ylabel('Offshore transport (m/s)')
-    ax4.yaxis.set_label_position("right")
-    ax4.yaxis.tick_right()
-    add_subtitle(ax4, '(d) Monthly mean offshore transport')
+    ax4.set_ylabel('Cross-shelf transport (m/s)')
+    ax4.yaxis.label.set_color(ocean_blue)
+    ax4.tick_params(axis='y', colors=ocean_blue)
+    ax4.spines['right'].set_color(ocean_blue)
+    add_subtitle(ax4, '(d) Monthly mean bottom cross-shelf transport')
     l4, b4, w4, h4 = ax4.get_position().bounds
     ax4.set_position([l3, b4, w3, h4])
+    
+    ax5 = ax4.twinx()
+    ax5.plot(np.arange(len(time_cross)), ucross/valong*100, 'xk')
+    ax5.set_xlim(xlim)
+    ax5.set_ylim([-20, 20])
+    ax5.set_yticks([-16, -8, 0, 8, 16])
+    ax5.set_ylabel('Cross-shelf transport\n(% along-shelf)')
+    
+    # swap y-axes
+    ax4.yaxis.set_label_position("right")
+    ax4.yaxis.tick_right()
+    ax5.yaxis.set_label_position("left")
+    ax5.yaxis.tick_left()
+    
+    # season texts
+    ax4.text(0.5/13, -0.2, 'Birak', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(2.5/13, -0.2, 'Bunuru', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(4.5/13, -0.2, 'Djeran', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(6.5/13, -0.2, 'Makuru', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(8.5/13, -0.2, 'Djilba', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(10.5/13, -0.2, 'Kambarang', ha='center', color=season_color, transform=ax4.transAxes)
+    ax4.text(12.5/13, -0.2, 'Birak', ha='center', color=season_color, transform=ax4.transAxes)
 
     if show is True:
         plt.show()
@@ -635,23 +674,23 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
         plt.close()
 
 if __name__ == '__main__':
-    if not os.path.exists('temp_data/perth_wide_monthly_mean_u_cross_100m.csv'):
+    if not os.path.exists('temp_data/perth_wide_monthly_mean_u_cross_100m.csv'):# or not os.path.exists('temp_data/perth_wide_monthly_mean_v_along_100m.csv'):
         save_bottom_cross_shelf_velocities()
     if not os.path.exists('temp_data/perth_wide_distance_100m.csv'):
         save_distance_along_depth_contour()
 
     plot_dir = get_dir_from_json("plots")
 
-    # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
+    figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
     # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    particles = Particles.read_from_netcdf(particle_path)
+    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    # particles = Particles.read_from_netcdf(particle_path)
     
     # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
-    figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
+    # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
     # # percentages past shelf:
     # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
