@@ -6,7 +6,7 @@ from tools.files import get_daily_files_in_time_range, get_files_in_dir, create_
 from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range, get_closest_time_index
 from tools.coordinates import get_distance_between_points, get_points_on_line_between_points, get_transect_lons_lats_ds_from_json
 from tools.coordinates import get_bearing_between_points
-from tools.velocity_shore_angles import get_cross_shelf_velocity
+from tools.velocity_shore_angles import get_cross_shelf_velocity, get_along_shelf_velocity
 from tools import log
 from tools.seawater_density import calculate_density
 from dataclasses import dataclass
@@ -459,6 +459,11 @@ def get_cross_shelf_velocity_component(roms_data:RomsData) -> np.ndarray:
     h_smooth = gaussian_filter(roms_data.grid.h, 2) # smooth bathymetry before calculating cross-shelf velocity
     u_cross = get_cross_shelf_velocity(h_smooth, roms_data.u_east, roms_data.v_north)
     return u_cross
+
+def get_along_shelf_velocity_component(roms_data:RomsData) -> np.ndarray:
+    h_smooth = gaussian_filter(roms_data.grid.h, 2) # smooth bathymetry before calculating cross-shelf velocity
+    v_along = get_along_shelf_velocity(h_smooth, roms_data.u_east, roms_data.v_north)
+    return v_along
 
 @dataclass
 class TransectData:

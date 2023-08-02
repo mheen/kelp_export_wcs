@@ -34,3 +34,11 @@ def get_cross_shelf_velocity(h:np.ndarray[float],
     u_cross_shelf = np.sqrt(u**2+v**2)*np.cos(theta)
 
     return u_cross_shelf
+
+def get_along_shelf_velocity(h:np.ndarray[float],
+                             u:np.ndarray[float],
+                             v:np.ndarray[float]) -> np.ndarray[float]:
+    theta = get_angle_between_mask_and_velocity(h, u, v)
+    v_along_shelf = np.sqrt(u**2+v**2)*np.sin(theta)
+    
+    return v_along_shelf
