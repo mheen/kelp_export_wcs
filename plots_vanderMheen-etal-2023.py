@@ -224,12 +224,12 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
     ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax1, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
-    ax1.plot(glider.lon, glider.lat, '.k', label='Glider transect')
+    ax1.plot(glider.lon, glider.lat, '.k', label='Ocean glider transect')
     cbar1.remove()
     ax1.legend(loc='lower left')
     l1, b1, w1, h1 = ax1.get_position().bounds
     
-    add_subtitle(ax1, '(a) Makuru mean SST')
+    add_subtitle(ax1, '(a) Makuru (JJ) mean SST')
     
     # (b) July 2022 glider transect temperature
     depth_ticks = [-150, -100, -50, 0]
@@ -248,7 +248,7 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
     cbar2 = plt.colorbar(c2, cax=cbax2)
     cbar2.set_label('Temperature ($^o$C)')
     
-    add_subtitle(ax2, f'(b) Glider temperatures: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
+    add_subtitle(ax2, f'(b) Ocean glider temperatures: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
                  location='lower right')
     
     # (c) July 2022 glider transect backscatter
@@ -265,7 +265,7 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
     cbar3 = plt.colorbar(c3, cax=cbax3)
     cbar3.set_label('Particle backscatter (m$^{-1}$)')
     
-    add_subtitle(ax3, f'(c) Glider backscatter: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
+    add_subtitle(ax3, f'(c) Ocean glider backscatter: {start_glider.strftime("%d %b %Y")} - {end_glider.strftime("%d %b %Y")}',
                  location='lower right')
     
     # move ax1
@@ -681,9 +681,9 @@ if __name__ == '__main__':
 
     plot_dir = get_dir_from_json("plots")
 
-    figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
+    # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
-    # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
+    figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
     # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
     # particles = Particles.read_from_netcdf(particle_path)
