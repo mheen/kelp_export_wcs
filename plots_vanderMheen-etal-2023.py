@@ -4,6 +4,7 @@ from tools.timeseries import add_month_to_time, convert_datetime_to_time
 from tools.coordinates import get_index_closest_point
 from data.kelp_data import KelpProbability
 from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs, get_subgrid
+from data.roms_data import read_roms_data_from_netcdf
 from data.roms_data import get_cross_shelf_velocity_component, get_along_shelf_velocity_component, get_eta_xi_along_depth_contour
 from data.roms_data import get_lon_lat_along_depth_contour, get_distance_along_transect
 from data.glider_data import GliderData
@@ -584,7 +585,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
     lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
 
-    fig = plt.figure(figsize=(12, 6))
+    fig = plt.figure(figsize=(8, 12))
     plt.subplots_adjust(hspace=0.1, wspace=0.4)
 
     location_info = get_location_info('perth')
@@ -608,7 +609,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     z = np.copy(density_ds0_norm)*scale_z
     z[z==0.] = np.nan
 
-    ax1 = plt.subplot(1, 3, 1, projection=ccrs.PlateCarree())
+    ax1 = plt.subplot(2, 2, 1, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
     ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax1, show=False, show_perth_canyon=False,
@@ -619,7 +620,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
     cbar1 = plt.colorbar(c1, cax=cbax1)
     if scale_z == 10:
-        cbar_label = 'Origin of particles passing shelf break (per mille)'
+        cbar_label = 'Origin of particles passing shelf break (per thousand)'
     elif scale_z == 1:
         cbar_label = 'Origin of particles passing shelf break (%)'
     else:
@@ -629,7 +630,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     ax1.plot(lon_examples, lat_examples, 'ow', linewidth=5)
     ax1.plot(lon_examples, lat_examples, 'xk')
 
-    # (b) map of mean cross-shelf transport in Perth region
+    # (d) map of mean cross-shelf transport in Perth region
     csv_ucross = 'temp_data/perth_wide_monthly_mean_u_cross_100m.csv'
     if not os.path.exists(csv_ucross):
         raise ValueError(f'''Mean cross-shelf velocity file does not yet exist: {csv_ucross}
@@ -657,17 +658,47 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lat_coords = lat_bins[:-1]+np.diff(lat_bins)
     lon_coords = np.ones(len(lat_coords))*lon_c
 
-    ax2 = plt.subplot(1, 3, 2, projection=ccrs.PlateCarree())
+    ax2 = plt.subplot(2, 2, 4, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info, zorder_c=1, ymarkers='right')
     q = ax2.quiver(lon_coords, lat_coords, -ucross_bins, np.zeros(len(ucross_bins)))
     ax2.quiverkey(q, 0.88, 0.02, 0.1, label='0.1 m/s', labelpos='W')
     # ax2.set_yticklabels([])
-    add_subtitle(ax2, '(b) Makuru cross-shelf transport')
+    add_subtitle(ax2, '(d) Makuru (JJ) cross-shelf')
 
     l2, b2, w2, h2 = ax2.get_position().bounds
     ax2.set_position([l2+0.02, b2, w2, h2])
 
-    # (c) example particle tracks from different reefs (particle with median time to cross shelf)
+    # (c) map of makuru mean bottom velocity field
+    makuru_input = f'{get_dir_from_json("roms_data")}2017/cwa_mean_2017makuru.nc'
+    makuru_roms = read_roms_data_from_netcdf(makuru_input, location_info.lon_range, location_info.lat_range)
+    n_thin = 3
+    u = makuru_roms.u_east[0, 0, :, :]
+    v = makuru_roms.v_north[0, 0, :, :]
+    vel = np.sqrt(u**2+v**2)
+    lon = makuru_roms.grid.lon
+    lat = makuru_roms.grid.lat
+
+    ax3 = plt.subplot(2, 2, 3, projection=ccrs.PlateCarree())
+    ax3 = plot_basic_map(ax3, location_info)
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
+                        ax=ax3, show=False, show_perth_canyon=False,
+                        color='k', linewidths=0.7)
+    c3 = ax3.pcolormesh(lon, lat, vel, cmap='RdBu_r', vmin=0., vmax=0.2)
+    q3 = ax3.quiver(lon[::n_thin, ::n_thin], lat[::n_thin, ::n_thin], u[::n_thin, ::n_thin], v[::n_thin, ::n_thin], scale=1.)
+    
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
+    cbar3 = plt.colorbar(c3, cax=cbax3)
+    cbar3.set_label('Bottom velocity (m/s)')
+    
+    # qk = plt.quiverkey(ax3, 0.9, 0.1, 0.1, '0.1 m/s', labelpos='E',
+    #                    coordinates='figure')
+    
+    add_subtitle(ax3, '(c) Makuru (JJ) bottom velocity')
+    
+    l3, b3, w3, h3 = ax3.get_position().bounds
+
+    # (b) example particle tracks from different reefs (particle with median time to cross shelf)
     i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
     lon0 = particles.lon0[p_ds]
     lat0 = particles.lat0[p_ds]
@@ -681,7 +712,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
         p_ex.append(ps_ex[i_med])
     
     location_info_w = get_location_info('perth_wide_south')
-    ax4 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
+    ax4 = plt.subplot(2, 2, 2, projection=ccrs.PlateCarree())
     ax4 = plot_basic_map(ax4, location_info_w, ymarkers='right')
     ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
                         ax=ax4, show=False, show_perth_canyon=False,
@@ -699,10 +730,13 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
         ax4.plot(lon0[p_ex[i]], lat0[p_ex[i]], 'xk')
         ax4.plot(lon[p_ex[i], t_ds[p_ex[i]]], lat[p_ex[i], t_ds[p_ex[i]]], 'ok')
         
-    add_subtitle(ax4, '(c) Example particle trajectories')
+    add_subtitle(ax4, '(b) Example particle trajectories')
     
     l4, b4, w4, h4 = ax4.get_position().bounds
-    ax4.set_position([l4, b2, h2/h4*w4, h2])
+    ax4.set_position([l2, b1, h1/h4*w4, h1])
+    
+    l4, b4, w4, h4 = ax4.get_position().bounds
+    ax2.set_position([l4, b2, w2, h2])
 
     if show is True:
         plt.show()
@@ -734,6 +768,6 @@ if __name__ == '__main__':
     # # percentages past shelf:
     # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
-    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
+    # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
-    # figure6(particles, output_path='fig6.jpg', show=False)
+    figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
