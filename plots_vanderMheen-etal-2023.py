@@ -1,7 +1,9 @@
 from tools import log
 from tools.files import get_dir_from_json
 from tools.timeseries import add_month_to_time, convert_datetime_to_time
-from tools.coordinates import get_index_closest_point
+from tools.coordinates import get_index_closest_point, get_distance_between_points
+from pts_tools.releases import get_releases
+from config import get_pts_config, PtsConfig
 from data.kelp_data import KelpProbability
 from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs, get_subgrid
 from data.roms_data import read_roms_data_from_netcdf
@@ -10,6 +12,7 @@ from data.roms_data import get_lon_lat_along_depth_contour, get_distance_along_t
 from data.glider_data import GliderData
 from data.satellite_data import SatelliteSST, read_satellite_sst_from_netcdf
 from data.wind_data import WindData, read_era5_wind_data_from_netcdf, get_daily_mean_wind_data, convert_u_v_to_meteo_vel_dir
+from data.carbon_sequestration import read_carbon_fraction_from_netcdf, get_sequestration_fraction_at_depth_location
 from particles import Particles, get_particle_density, DensityGrid
 from plot_tools.basic_maps import plot_basic_map
 from plot_tools.general import add_subtitle
@@ -46,8 +49,13 @@ season_color = '#4f5478'
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
 
+# decay rate from Simpkins et al. (in prep)
 k = -0.075
 k_sd = 0.031
+
+# kelp density and carbon content from Filbee-Dexter & Wernberg (2020)
+kelp_density = 6.3 # kelp/m2
+carbon_content = 0.3 # fraction dry weight
 
 def save_bottom_cross_shelf_velocities(location_name='perth_wide',
                                        h_level=100,
@@ -747,6 +755,47 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
 
         plt.close()
 
+def calculate_g_carbon_sequestered(fmin=0.19, fmax=0.33, depth=200):
+    kelp_prob = KelpProbability.read_from_tiff('input/perth_kelp_probability.tif')
+    dx = 250 # m approximate resolution of kelp probability
+    pixel_area = dx**2 # m2
+    
+    months_detritus = [3, 4, 5, 6, 7, 8]
+    detritus = [4.8, 4.8, 4.8, 2.12, 2.12, 2.12]
+    n_days = (datetime(2017, 8, 31)-datetime(2017, 3, 1)).days+1
+    detritus_per_day = [] # g/kelp/day
+    for n in range(n_days):
+        t = datetime(2017, 3, 1)+timedelta(days=n)
+        i_month = months_detritus.index(t.month)
+        detritus_per_day.append(detritus[i_month])
+    
+    total_kelp_area = np.nansum(kelp_prob.prob*pixel_area)
+    total_kelp = total_kelp_area*kelp_density
+    total_gram_detritus = total_kelp*np.nansum(detritus_per_day)
+    total_gram_carbon = carbon_content*total_gram_detritus
+    
+    total_sequestered_min = fmin*total_gram_carbon
+    total_sequestered_max = fmax*total_gram_carbon
+    
+    print(f'Total past continental shelf: {total_sequestered_min/10**12} - {total_sequestered_max/10**12} TgC')
+    
+    carbon = read_carbon_fraction_from_netcdf()
+    lon_perth = 115.5
+    lat_perth = -32.
+    time, fseq_perth = get_sequestration_fraction_at_depth_location(carbon, lon_perth, lat_perth, depth)
+    
+    total_sequestered_min_50y = fseq_perth[50]*total_sequestered_min
+    total_sequestered_max_50y = fseq_perth[50]*total_sequestered_max
+    
+    print(f'Total sequestered for 50 years: {total_sequestered_min_50y/10**12} - {total_sequestered_max_50y/10**12} TgC')
+    
+    total_sequestered_min_100y = fseq_perth[100]*total_sequestered_min
+    total_sequestered_max_100y = fseq_perth[100]*total_sequestered_max
+    
+    print(f'Total sequestered for 100 years: {total_sequestered_min_100y/10**12} - {total_sequestered_max_100y/10**12} TgC')
+    
+    return total_sequestered_min, total_sequestered_max
+
 if __name__ == '__main__':
     if not os.path.exists('temp_data/perth_wide_monthly_mean_u_cross_100m.csv'):# or not os.path.exists('temp_data/perth_wide_monthly_mean_v_along_100m.csv'):
         save_bottom_cross_shelf_velocities()
@@ -759,8 +808,8 @@ if __name__ == '__main__':
     
     # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    particles = Particles.read_from_netcdf(particle_path)
+    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    # particles = Particles.read_from_netcdf(particle_path)
     
     # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
@@ -770,4 +819,6 @@ if __name__ == '__main__':
     
     # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
-    figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
+    # figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
+    
+    calculate_g_carbon_sequestered()
