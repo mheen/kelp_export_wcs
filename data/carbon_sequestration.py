@@ -81,7 +81,7 @@ def get_sequestration_fraction_at_depth_location(carbon_fraction:CarbonFraction,
     i_lat = get_closest_index(carbon_fraction.lat, lat_p)
     i_depth = get_closest_index(carbon_fraction.depth, depth_p)
     
-    fseq = carbon_fraction[:, i_depth, i_lon, i_lat]
+    fseq = carbon_fraction.fseq[:, i_depth, i_lon, i_lat]
     
     return carbon_fraction.time, fseq
 
