@@ -1,9 +1,6 @@
 from tools import log
 from tools.files import get_dir_from_json
 from tools.timeseries import add_month_to_time, convert_datetime_to_time
-from tools.coordinates import get_index_closest_point, get_distance_between_points
-from pts_tools.releases import get_releases
-from config import get_pts_config, PtsConfig
 from data.kelp_data import KelpProbability
 from data.roms_data import read_roms_grid_from_netcdf, read_roms_data_from_multiple_netcdfs, get_subgrid
 from data.roms_data import read_roms_data_from_netcdf
