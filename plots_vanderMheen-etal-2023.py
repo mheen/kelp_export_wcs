@@ -98,7 +98,7 @@ def save_distance_along_depth_contour(location_name='perth_wide', h_level=100):
 
 def figure1(show=True, output_path=None):
 
-    fig = plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(14, 8))
     plt.subplots_adjust(wspace=0.5)
 
     # (a) kelp probability map
@@ -169,10 +169,8 @@ def figure1(show=True, output_path=None):
     ax4.set_ylabel('Cross-shelf transport (m/s)')
     ax4.yaxis.label.set_color(ocean_blue)
     ax4.tick_params(axis='y', colors=ocean_blue)
-    ax4.spines['right'].set_color(ocean_blue)
+    ax4.spines['left'].set_color(ocean_blue)
     add_subtitle(ax4, '(d) Monthly mean bottom cross-shelf transport')
-    l4, b4, w4, h4 = ax4.get_position().bounds
-    ax4.set_position([l3, b4, w3, h4])
     
     ax5 = ax4.twinx()
     ax5.plot(np.arange(len(time_cross)), ucross/valong*100, 'xk')
@@ -180,12 +178,7 @@ def figure1(show=True, output_path=None):
     ax5.set_ylim([-20, 20])
     ax5.set_yticks([-16, -8, 0, 8, 16])
     ax5.set_ylabel('Cross-shelf transport\n(% along-shelf)')
-    
-    # swap y-axes
-    ax4.yaxis.set_label_position("right")
-    ax4.yaxis.tick_right()
-    ax5.yaxis.set_label_position("left")
-    ax5.yaxis.tick_left()
+    ax5.spines['left'].set_color(ocean_blue)
     
     # season texts
     ax4.text(0.5/13, -0.2, 'Birak', ha='center', color=season_color, transform=ax4.transAxes)
@@ -195,6 +188,11 @@ def figure1(show=True, output_path=None):
     ax4.text(8.5/13, -0.2, 'Djilba', ha='center', color=season_color, transform=ax4.transAxes)
     ax4.text(10.5/13, -0.2, 'Kambarang', ha='center', color=season_color, transform=ax4.transAxes)
     ax4.text(12.5/13, -0.2, 'Birak', ha='center', color=season_color, transform=ax4.transAxes)
+    
+    l4, b4, w4, h4 = ax4.get_position().bounds
+    l3, b3, w3, h3 = ax3.get_position().bounds
+    ax4.set_position([l3, b4, w3, h4])
+    ax5.set_position([l3, b4, w3, h4])
 
     if show is True:
         plt.show()
@@ -436,7 +434,7 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
         df.to_csv(output_path_csv_d, index=False)
      
     ax2.set_xlabel('Particle age (days)')
-    ax2.set_ylabel('Particles past depth range\naccounting for decomposition (%)')
+    ax2.set_ylabel('Particles past depth range (%)\naccounting for decomposition')
     ax2.set_ylim([0, 50])
     ax2.set_xlim(xlim)
     ax2.grid(True, linestyle='--', alpha=0.5)
@@ -479,18 +477,25 @@ def figure5(particles:Particles, h_deep_sea=200,
     
     dt_ds = np.array([(particles.time[t_ds[i]]-particles.time[t_release[p_ds[i]]]).total_seconds()/(24*60*60) for i in range(len(p_ds))])
     f_ds = np.exp(k*dt_ds)
+    f_ds_min = np.exp((k-k_sd)*dt_ds)
+    f_ds_max = np.exp((k+k_sd)*dt_ds)
     times_ds_int, _ = convert_datetime_to_time(times_ds)
     time_bins_int, _ = convert_datetime_to_time(time_bins)
     i_bins = np.digitize(times_ds_int, bins=time_bins_int)
     
     f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(1, 8)])
     f_ds_month_norm = f_ds_month/total_particles*100
+    f_ds_month_min = np.array([np.sum(f_ds_min[i_bins==i]) for i in range(1, 8)])
+    f_ds_month_norm_min = f_ds_month_min/total_particles*100
+    f_ds_month_max = np.array([np.sum(f_ds_max[i_bins==i]) for i in range(1, 8)])
+    f_ds_month_norm_max = f_ds_month_max/total_particles*100
+    
+    yerr = np.abs(np.array([f_ds_month_norm_min, f_ds_month_norm_max])-f_ds_month_norm)
     
     ax1 = plt.subplot(1, 2, 1)
-    ax1.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green)
-    ax1.set_ylabel('Particles passing shelf edge\naccounting for decomposition (%)')
-    ax1.set_ylim([0, 10.8])
-    ax1.spines['left'].set_color(kelp_green)
+    ax1.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green, yerr=yerr, ecolor='#6fbe81')
+    ax1.set_ylabel('Particles passing shelf edge (%)\naccounting for decomposition')
+    ax1.set_ylim([0, 11.5])
     ax1.tick_params(axis='y', colors=kelp_green)
     ax1.yaxis.label.set_color(kelp_green)
     add_subtitle(ax1, '(a) Decomposed particle export')
@@ -498,7 +503,7 @@ def figure5(particles:Particles, h_deep_sea=200,
     ax2 = ax1.twinx()
     ax2.plot(center_bins, n_releases_norm, 'xk', label='Particles released')
     ax2.set_ylabel('Particles released (%)')
-    ax2.set_ylim([0, 27])
+    ax2.set_ylim([0, 28.75])
     
     # season texts
     ax1.text(0.5/8, -0.1, 'Bunuru', ha='center', color=season_color, transform=ax1.transAxes)
@@ -557,11 +562,10 @@ def figure5(particles:Particles, h_deep_sea=200,
         
     ax4 = plt.subplot(1, 2, 2)
     ax4.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
-    ax4.set_ylabel('Occurrence of suitable conditions for\ndense shelf water transport\n(% of time)')
+    ax4.set_ylabel('Suitable conditions for DSWT (% of time)')
     ax4.yaxis.set_label_position("right")
     ax4.yaxis.tick_right()
     ax4.set_ylim([0, 100])
-    ax4.spines['left'].set_color(ocean_blue)
     ax4.tick_params(axis='y', colors=ocean_blue)
     ax4.yaxis.label.set_color(ocean_blue)
     add_subtitle(ax4, '(b) Dense shelf water transport')
@@ -590,8 +594,8 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lon_examples = np.array([115.50, 115.31, 115.65, 115.64, 115.30, 115.56])
     lat_examples = np.array([-31.90, -31.73, -31.78, -32.43, -32.38, -32.17])
 
-    fig = plt.figure(figsize=(8, 12))
-    plt.subplots_adjust(hspace=0.1, wspace=0.4)
+    fig = plt.figure(figsize=(15, 10))
+    plt.subplots_adjust(hspace=0.1, wspace=0.6)
 
     location_info = get_location_info('perth')
 
@@ -614,7 +618,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     z = np.copy(density_ds0_norm)*scale_z
     z[z==0.] = np.nan
 
-    ax1 = plt.subplot(2, 2, 1, projection=ccrs.PlateCarree())
+    ax1 = plt.subplot(1, 4, 1, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
     ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax1, show=False, show_perth_canyon=False,
@@ -625,7 +629,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     cbax1 = fig.add_axes([l1+w1+0.01, b1, 0.02, h1])
     cbar1 = plt.colorbar(c1, cax=cbax1)
     if scale_z == 10:
-        cbar_label = 'Origin of particles passing shelf break (per thousand)'
+        cbar_label = 'Origin of particles passing shelf break (‰)'
     elif scale_z == 1:
         cbar_label = 'Origin of particles passing shelf break (%)'
     else:
@@ -635,7 +639,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     ax1.plot(lon_examples, lat_examples, 'ow', linewidth=5)
     ax1.plot(lon_examples, lat_examples, 'xk')
 
-    # (d) map of mean cross-shelf transport in Perth region
+    # (c) map of mean cross-shelf transport in Perth region
     csv_ucross = 'temp_data/perth_wide_monthly_mean_u_cross_100m.csv'
     if not os.path.exists(csv_ucross):
         raise ValueError(f'''Mean cross-shelf velocity file does not yet exist: {csv_ucross}
@@ -663,17 +667,17 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lat_coords = lat_bins[:-1]+np.diff(lat_bins)
     lon_coords = np.ones(len(lat_coords))*lon_c
 
-    ax2 = plt.subplot(2, 2, 4, projection=ccrs.PlateCarree())
-    ax2 = plot_basic_map(ax2, location_info, zorder_c=1, ymarkers='right')
+    ax2 = plt.subplot(1, 4, 3, projection=ccrs.PlateCarree())
+    ax2 = plot_basic_map(ax2, location_info, zorder_c=1, ymarkers='off')
     q = ax2.quiver(lon_coords, lat_coords, -ucross_bins, np.zeros(len(ucross_bins)))
     ax2.quiverkey(q, 0.88, 0.02, 0.1, label='0.1 m/s', labelpos='W')
     # ax2.set_yticklabels([])
-    add_subtitle(ax2, '(d) Makuru (JJ) cross-shelf')
+    add_subtitle(ax2, '(c) Makuru (JJ) cross-shelf')
 
     l2, b2, w2, h2 = ax2.get_position().bounds
     ax2.set_position([l2+0.02, b2, w2, h2])
 
-    # (c) map of makuru mean bottom velocity field
+    # (b) map of makuru mean bottom velocity field
     makuru_input = f'{get_dir_from_json("roms_data")}2017/cwa_mean_2017makuru.nc'
     makuru_roms = read_roms_data_from_netcdf(makuru_input, location_info.lon_range, location_info.lat_range)
     n_thin = 3
@@ -683,12 +687,12 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     lon = makuru_roms.grid.lon
     lat = makuru_roms.grid.lat
 
-    ax3 = plt.subplot(2, 2, 3, projection=ccrs.PlateCarree())
-    ax3 = plot_basic_map(ax3, location_info)
+    ax3 = plt.subplot(1, 4, 2, projection=ccrs.PlateCarree())
+    ax3 = plot_basic_map(ax3, location_info, ymarkers='off')
     ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax3, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
-    c3 = ax3.pcolormesh(lon, lat, vel, cmap='RdBu_r', vmin=0., vmax=0.2)
+    c3 = ax3.pcolormesh(lon, lat, vel, cmap=cmocean.cm.deep_r, vmin=0., vmax=0.2)
     q3 = ax3.quiver(lon[::n_thin, ::n_thin], lat[::n_thin, ::n_thin], u[::n_thin, ::n_thin], v[::n_thin, ::n_thin], scale=1.)
     
     l3, b3, w3, h3 = ax3.get_position().bounds
@@ -699,11 +703,11 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     # qk = plt.quiverkey(ax3, 0.9, 0.1, 0.1, '0.1 m/s', labelpos='E',
     #                    coordinates='figure')
     
-    add_subtitle(ax3, '(c) Makuru (JJ) bottom velocity')
+    add_subtitle(ax3, '(b) Makuru (JJ) velocity')
     
     l3, b3, w3, h3 = ax3.get_position().bounds
 
-    # (b) example particle tracks from different reefs (particle with median time to cross shelf)
+    # (d) example particle tracks from different reefs (particle with median time to cross shelf)
     i_ex, j_ex = grid.get_index(lon_examples, lat_examples)
     lon0 = particles.lon0[p_ds]
     lat0 = particles.lat0[p_ds]
@@ -717,7 +721,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
         p_ex.append(ps_ex[i_med])
     
     location_info_w = get_location_info('perth_wide_south')
-    ax4 = plt.subplot(2, 2, 2, projection=ccrs.PlateCarree())
+    ax4 = plt.subplot(1, 4, 4, projection=ccrs.PlateCarree())
     ax4 = plot_basic_map(ax4, location_info_w, ymarkers='right')
     ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
                         ax=ax4, show=False, show_perth_canyon=False,
@@ -735,13 +739,14 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
         ax4.plot(lon0[p_ex[i]], lat0[p_ex[i]], 'xk')
         ax4.plot(lon[p_ex[i], t_ds[p_ex[i]]], lat[p_ex[i], t_ds[p_ex[i]]], 'ok')
         
-    add_subtitle(ax4, '(b) Example particle trajectories')
+    add_subtitle(ax4, '(d) Example trajectories')
     
+    # rescale ax4 to fit other axes
     l4, b4, w4, h4 = ax4.get_position().bounds
-    ax4.set_position([l2, b1, h1/h4*w4, h1])
+    ax4.set_position([l4, b1, h1/h4*w4, h1])
     
-    l4, b4, w4, h4 = ax4.get_position().bounds
-    ax2.set_position([l4, b2, w2, h2])
+    # l4, b4, w4, h4 = ax4.get_position().bounds
+    # ax2.set_position([l4, b2, w2, h2])
 
     if show is True:
         plt.show()
@@ -801,7 +806,7 @@ if __name__ == '__main__':
 
     plot_dir = get_dir_from_json("plots")
 
-    # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
+    figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
     # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
@@ -811,11 +816,9 @@ if __name__ == '__main__':
     # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
     # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
-    # # percentages past shelf:
-    # # 59% particles, 19-33% accounting for decomposition (25% mean)
     
     # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
     # figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
     
-    calculate_g_carbon_sequestered()
+    # calculate_g_carbon_sequestered()
