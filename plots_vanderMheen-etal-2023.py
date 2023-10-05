@@ -317,7 +317,7 @@ def figure3(particles:Particles, dx=0.02,
                         color='k', linewidths=0.7)
     
     c3 = ax3.pcolormesh(x, y, np.log10(density_bunuru), vmin=vmin, vmax=vmax, cmap=cmap)
-    add_subtitle(ax3, '(a) Bunuru (end of March)')
+    add_subtitle(ax3, '(a) March')
     
     # (b) Djeran (end of May)
     l_djeran = np.array([particles.time[t_release[i]].month in [4, 5] for i in range(len(t_release))])
@@ -334,7 +334,7 @@ def figure3(particles:Particles, dx=0.02,
                         color='k', linewidths=0.7)
     
     c1 = ax1.pcolormesh(x, y, np.log10(density_djeran), vmin=vmin, vmax=vmax, cmap=cmap)
-    add_subtitle(ax1, '(b) Djeran (end of May)')
+    add_subtitle(ax1, '(b) May')
     
     # (c) Makuru (end of July)
     l_makuru = np.array([particles.time[t_release[i]].month in [6, 7] for i in range(len(t_release))])
@@ -351,7 +351,7 @@ def figure3(particles:Particles, dx=0.02,
                         color='k', linewidths=0.7)
     
     c2 = ax2.pcolormesh(x, y, np.log10(density_makuru), vmin=vmin, vmax=vmax, cmap=cmap)
-    add_subtitle(ax2, '(c) Makuru (end of July)')
+    add_subtitle(ax2, '(c) July')
     
     # colorbar
     l2, b2, w2, h2 = ax2.get_position().bounds
@@ -395,49 +395,42 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
                                                                output_path_csv=output_path_csv_p)
     ax1.set_ylabel('Particles past depth range (%)')
     ax1.set_xlim(xlim)
-    ax1.set_ylim([0, 70])
+    ax1.set_ylim([0, 62])
     add_subtitle(ax1, '(a) Particle export')
     
     l1.remove()
+    l1 = ax1.legend(title='Depth (m)', loc='lower right')#, bbox_to_anchor=(1.01, 1.01))
     
     # (b) age in deep sea with decomposition
     ax2 = plt.subplot(1, 2, 2)
     
-    for i, h_deep_sea in enumerate(h_deep_seas):
-        _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(h_deep_sea)
-        n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
-        n_deep_sea_decomposed = n_deep_sea_per_age*np.exp(k*age_arriving_ds)
-        total_particles = particles.lon.shape[0]
-        f_deep_sea_decomposed = n_deep_sea_decomposed/total_particles*100
-        f_decomposed = np.cumsum(f_deep_sea_decomposed)
-
-        ax2.plot(age_arriving_ds, f_decomposed, color=colors[i], linestyle=linestyles[i], label=h_deep_sea)
-        
-        if i == 0:
-            df = pd.DataFrame(np.array([age_arriving_ds, f_decomposed]).transpose(),
-                              columns=['age (days)', f'fraction past {h_deep_sea}'])
-        else:
-            df[f'fraction past {h_deep_sea}'] = f_decomposed
-        
-        if h_deep_sea == 200:
-            n_deep_sea_decomposed_min = n_deep_sea_per_age*np.exp((k-k_sd)*age_arriving_ds)
-            n_deep_sea_decomposed_max = n_deep_sea_per_age*np.exp((k+k_sd)*age_arriving_ds)
-            f_decomposed_min = np.cumsum(n_deep_sea_decomposed_min/total_particles*100)
-            f_decomposed_max = np.cumsum(n_deep_sea_decomposed_max/total_particles*100)
-            ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=colors[i], alpha=0.5)
-            print(f'Final percentage past shelf accounting for decomposition: minimum {f_decomposed_min[-1]}, mean {f_decomposed[-1]}, maximum {f_decomposed_max[-1]}')
+    _, age_arriving_ds, matrix_arriving_ds = particles.get_matrix_release_age_arriving_deep_sea(200)
+    n_deep_sea_per_age = np.sum(matrix_arriving_ds, axis=0)
+    n_deep_sea_decomposed = n_deep_sea_per_age*np.exp(k*age_arriving_ds)
+    total_particles = particles.lon.shape[0]
+    f_deep_sea_decomposed = n_deep_sea_decomposed/total_particles*100
+    f_decomposed = np.cumsum(f_deep_sea_decomposed)
+    
+    n_deep_sea_decomposed_min = n_deep_sea_per_age*np.exp((k-k_sd)*age_arriving_ds)
+    n_deep_sea_decomposed_max = n_deep_sea_per_age*np.exp((k+k_sd)*age_arriving_ds)
+    f_decomposed_min = np.cumsum(n_deep_sea_decomposed_min/total_particles*100)
+    f_decomposed_max = np.cumsum(n_deep_sea_decomposed_max/total_particles*100)
+    
+    ax2.plot(age_arriving_ds, f_decomposed, color=kelp_green, linestyle='-')
+    ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=kelp_green, alpha=0.5)
+    
+    df = pd.DataFrame(np.array([age_arriving_ds, f_decomposed]).transpose(),
+                              columns=['age (days)', f'fraction past 200'])
     
     if output_path_csv_d is not None:
         df.to_csv(output_path_csv_d, index=False)
      
     ax2.set_xlabel('Particle age (days)')
-    ax2.set_ylabel('Particles past depth range (%)\naccounting for decomposition')
-    ax2.set_ylim([0, 50])
+    ax2.set_ylabel('Particles past shelf edge (%)\naccounting for decomposition')
+    ax2.set_ylim([0, 40])
     ax2.set_xlim(xlim)
     ax2.grid(True, linestyle='--', alpha=0.5)
     add_subtitle(ax2, '(b) Decomposed particle export')
-    
-    l2 = ax2.legend(title='Depth (m)', loc='upper left', bbox_to_anchor=(1.01, 1.01))
     
     if show is True:
         plt.show()
@@ -502,12 +495,6 @@ def figure5(particles:Particles, h_deep_sea=200,
     ax2.set_ylabel('Particles released (%)')
     ax2.set_ylim([0, 28.75])
     
-    # season texts
-    ax1.text(0.5/8, -0.1, 'Bunuru', ha='center', color=season_color, transform=ax1.transAxes)
-    ax1.text(2.5/8, -0.1, 'Djeran', ha='center', color=season_color, transform=ax1.transAxes)
-    ax1.text(4.5/8, -0.1, 'Makuru', ha='center', color=season_color, transform=ax1.transAxes)
-    ax1.text(6.8/8, -0.1, 'Djilba', ha='center', color=season_color, transform=ax1.transAxes)
-    
     # (b) histogram dswc occurrence
     start_date = datetime(2017, 3, 1)
     end_date = datetime(2017, 9, 30)
@@ -566,12 +553,6 @@ def figure5(particles:Particles, h_deep_sea=200,
     ax4.tick_params(axis='y', colors=ocean_blue)
     ax4.yaxis.label.set_color(ocean_blue)
     add_subtitle(ax4, '(b) Dense shelf water transport')
-    
-    # season texts
-    ax4.text(0.5/8, -0.1, 'Bunuru', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(2.5/8, -0.1, 'Djeran', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(4.5/8, -0.1, 'Makuru', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(6.8/8, -0.1, 'Djilba', ha='center', color=season_color, transform=ax4.transAxes)
 
     if show is True:
         plt.show()
@@ -672,7 +653,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     q = ax2.quiver(lon_coords, lat_coords, -ucross_bins, np.zeros(len(ucross_bins)))
     ax2.quiverkey(q, 0.88, 0.02, 0.1, label='0.1 m/s', labelpos='W')
     # ax2.set_yticklabels([])
-    add_subtitle(ax2, '(c) Makuru (JJ) cross-shelf')
+    add_subtitle(ax2, '(c) June-July cross-shelf')
 
     l2, b2, w2, h2 = ax2.get_position().bounds
     ax2.set_position([l2+0.02, b2, w2, h2])
@@ -693,7 +674,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
                         ax=ax3, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     c3 = ax3.pcolormesh(lon, lat, vel, cmap=cmocean.cm.deep_r, vmin=0., vmax=0.2)
-    q3 = ax3.quiver(lon[::n_thin, ::n_thin], lat[::n_thin, ::n_thin], u[::n_thin, ::n_thin], v[::n_thin, ::n_thin], scale=1.)
+    q3 = ax3.quiver(lon[::n_thin, ::n_thin], lat[::n_thin, ::n_thin], u[::n_thin, ::n_thin], v[::n_thin, ::n_thin], scale=1., width=0.008)
     
     l3, b3, w3, h3 = ax3.get_position().bounds
     cbax3 = fig.add_axes([l3+w3+0.01, b3, 0.02, h3])
@@ -703,7 +684,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     # qk = plt.quiverkey(ax3, 0.9, 0.1, 0.1, '0.1 m/s', labelpos='E',
     #                    coordinates='figure')
     
-    add_subtitle(ax3, '(b) Makuru (JJ) velocity')
+    add_subtitle(ax3, '(b) June-July velocity')
     
     l3, b3, w3, h3 = ax3.get_position().bounds
 
@@ -808,7 +789,7 @@ if __name__ == '__main__':
 
     # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
-    figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
+    # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
     # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
     # particles = Particles.read_from_netcdf(particle_path)
