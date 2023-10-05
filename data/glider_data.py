@@ -4,6 +4,7 @@ sys.path.insert(1, parent)
 
 from tools.timeseries import convert_time_to_datetime, convert_datetime_to_time, get_l_time_range
 from tools.files import get_dir_from_json
+from tools.coordinates import get_distance_between_points
 from location_info import LocationInfo
 from tools.seawater_density import calculate_density
 from gridfit import gridfit
@@ -80,7 +81,7 @@ class GliderData:
         # create grid along transect to interpolate to
         t = np.arange(np.nanmin(self.cumtime), np.nanmax(self.cumtime)+dt, dt)
         z = np.arange(np.nanmin(-self.depth), 0, dz)
-
+        
         values_fitted, _, _ = gridfit(self.cumtime, -self.depth, values, t, z)
 
         return t, z, values_fitted
@@ -129,13 +130,21 @@ class GliderData:
 
         tt, zz = np.meshgrid(t, z)
         
+        # get overall distance of transect
+        l_nonan = np.logical_and(~np.isnan(self.lon), ~np.isnan(self.lat))
+        lon = self.lon[l_nonan]
+        lat = self.lat[l_nonan]
+        max_dist = get_distance_between_points(lon[0], lat[0], lon[-1], lat[-1])
+        
         if all(self.lon[~np.isnan(self.lon)] < 130.): # in WA: so flip transect horizontally to show coast on the east
             transect_values = np.fliplr(transect_values)
             z_bottom = np.flip(np.copy(self.z_bottom))
-            x_label = '$\leftarrow$ Distance along transect'
+            x_label = '$\leftarrow$ Distance along transect (km)'
+            xticklabels = [np.round(max_dist/1000, 0), 0]
         else:
             z_bottom = self.z_bottom
-            x_label = 'Distance along transect $\rightarrow$'
+            x_label = 'Distance along transect (km) $\rightarrow$'
+            xticklabels = [0, np.round(max_dist/1000, 0)]
 
         c = ax.pcolormesh(tt, zz, transect_values, cmap=cmap, vmin=vmin, vmax=vmax)
         cbar = plt.colorbar(c)
@@ -147,9 +156,10 @@ class GliderData:
         ax.set_ylim([z[0], 0])
 
         ax.set_ylabel('Depth (m)')
-        ax.set_xticks([])
-        ax.set_xticklabels([])
         ax.set_xlabel(x_label)
+        
+        ax.set_xticks([0, self.cumtime[-1]])
+        ax.set_xticklabels(xticklabels)
 
         if show is True:
             plt.show()

@@ -184,15 +184,6 @@ def figure1(show=True, output_path=None):
     ax5.set_ylabel('Cross-shelf transport\n(% along-shelf)')
     ax5.spines['left'].set_color(ocean_blue)
     
-    # season texts
-    ax4.text(0.5/13, -0.2, 'Birak', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(2.5/13, -0.2, 'Bunuru', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(4.5/13, -0.2, 'Djeran', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(6.5/13, -0.2, 'Makuru', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(8.5/13, -0.2, 'Djilba', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(10.5/13, -0.2, 'Kambarang', ha='center', color=season_color, transform=ax4.transAxes)
-    ax4.text(12.5/13, -0.2, 'Birak', ha='center', color=season_color, transform=ax4.transAxes)
-    
     l4, b4, w4, h4 = ax4.get_position().bounds
     l3, b3, w3, h3 = ax3.get_position().bounds
     ax4.set_position([l3, b4, w3, h4])
@@ -237,7 +228,7 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
     ax1.legend(loc='lower left')
     l1, b1, w1, h1 = ax1.get_position().bounds
     
-    add_subtitle(ax1, '(a) Makuru (JJ) mean SST')
+    add_subtitle(ax1, '(a) June-July mean SST')
     
     # (b) July 2022 glider transect temperature
     depth_ticks = [-150, -100, -50, 0]
@@ -249,6 +240,8 @@ def figure2(cmap_temp='RdBu_r', vmin_temp=18, vmax_temp=22,
                                           dz_interp=dz_interp, dt_interp=dt_interp)
     ax2.set_yticks(depth_ticks)
     ax2.set_yticklabels(depth_ticklabels)
+    ax2.set_xticklabels([])
+    ax2.set_xlabel('')
     
     cbar2.remove()
     l2, b2, w2, h2 = ax2.get_position().bounds
@@ -813,9 +806,9 @@ if __name__ == '__main__':
 
     plot_dir = get_dir_from_json("plots")
 
-    figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
+    # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
-    # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
+    figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
     # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
     # particles = Particles.read_from_netcdf(particle_path)
