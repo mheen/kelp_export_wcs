@@ -35,13 +35,16 @@ class BathymetryData:
         return BathymetryData(lon, lat, h)
 
     @staticmethod
-    def read_from_netcdf(input_path:str):
+    def read_from_netcdf(input_path:str, lon_str='lon_rho', lat_str='lat_rho', h_str='h', h_fac=1):
         log.info(f'Reading bathymetry data from: {input_path}')
 
         netcdf = Dataset(input_path)
-        lon = netcdf['lon_rho'][:].filled(fill_value=np.nan)
-        lat = netcdf['lat_rho'][:].filled(fill_value=np.nan)
-        h = netcdf['h'][:].filled(fill_value=np.nan)
+        lon = netcdf[lon_str][:].filled(fill_value=np.nan)
+        lat = netcdf[lat_str][:].filled(fill_value=np.nan)
+        h = h_fac*netcdf[h_str][:].filled(fill_value=np.nan)
         netcdf.close()
+        
+        if len(lon.shape) == 1 and len(lat.shape) == 1:
+            lon, lat = np.meshgrid(lon, lat)
 
         return BathymetryData(lon, lat, h)
