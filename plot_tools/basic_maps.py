@@ -1,4 +1,8 @@
-from location_info import LocationInfo
+import os, sys
+parent = os.path.abspath('.')
+sys.path.insert(1, parent)
+
+from location_info import LocationInfo, get_location_info
 import cartopy.crs as ccrs
 import cartopy.mpl.ticker as cticker
 from cartopy.io import shapereader
@@ -36,6 +40,11 @@ def plot_basic_map(ax:plt.axes, location_info:LocationInfo,
     for _, geometry in zip(shp.records(), shp.geometries()):
         ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='#989898',
                            edgecolor='black', zorder=zorder_c)
+        
+    shp2 = shapereader.Reader('input/GI.shp')
+    for _, geometry in zip(shp2.records(), shp2.geometries()):
+        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='#989898',
+                          edgecolor='black', zorder=100)
     
     ax = add_grid(ax, location_info.meridians, location_info.parallels, xmarkers, ymarkers, draw_grid)
 
