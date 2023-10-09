@@ -312,7 +312,7 @@ def figure3(particles:Particles, dx=0.02,
     
     ax3 = plt.subplot(1, 3, 1, projection=ccrs.PlateCarree())
     ax3 = plot_basic_map(ax3, location_info)
-    ax3 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info,
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax3, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
@@ -329,7 +329,7 @@ def figure3(particles:Particles, dx=0.02,
     
     ax1 = plt.subplot(1, 3, 2, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
-    ax1 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info,
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax1, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
@@ -346,7 +346,7 @@ def figure3(particles:Particles, dx=0.02,
     
     ax2 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info)
-    ax2 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info,
+    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax2, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
@@ -601,7 +601,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
 
     ax1 = plt.subplot(1, 4, 1, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
-    ax1 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info,
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax1, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
@@ -670,7 +670,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
 
     ax3 = plt.subplot(1, 4, 2, projection=ccrs.PlateCarree())
     ax3 = plot_basic_map(ax3, location_info, ymarkers='off')
-    ax3 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info,
+    ax3 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info,
                         ax=ax3, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     c3 = ax3.pcolormesh(lon, lat, vel, cmap=cmocean.cm.deep_r, vmin=0., vmax=0.2)
@@ -704,7 +704,7 @@ def figure6(particles:Particles, h_deep_sea=200, filter_kelp_prob=0.7,
     location_info_w = get_location_info('perth_wide_south')
     ax4 = plt.subplot(1, 4, 4, projection=ccrs.PlateCarree())
     ax4 = plot_basic_map(ax4, location_info_w, ymarkers='right')
-    ax4 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info_w,
+    ax4 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info_w,
                         ax=ax4, show=False, show_perth_canyon=False,
                         color='k', linewidths=0.7)
     
@@ -791,15 +791,15 @@ if __name__ == '__main__':
     
     # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
-    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    # particles = Particles.read_from_netcdf(particle_path)
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particles = Particles.read_from_netcdf(particle_path)
     
-    # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
+    figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
     # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
     
     # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
-    # figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
+    figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
     
     # calculate_g_carbon_sequestered()
