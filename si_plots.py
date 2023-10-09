@@ -68,6 +68,9 @@ location_info = get_location_info('cwa_perth')
 time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
 
 roms_grid = read_roms_grid_from_netcdf('input/cwa_roms_grid.nc')
+bathy = BathymetryData.read_from_netcdf(f'{get_dir_from_json("bathymetry")}',
+                                        lon_str='lon', lat_str='lat', h_str='z',
+                                        h_fac=-1)
 
 # ---------------------------------------------------------------------------------
 # CLIMATE INDICES
@@ -221,11 +224,11 @@ if plot_s3 == True:
     ax2 = plot_basic_map(ax2, location_info)
     ax2.set_yticklabels([])
     ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
-    c2 = ax2.pcolormesh(roms_grid.lon, roms_grid.lat, np.log10(layer_depth), cmap=cmocean.cm.deep, vmin=0, vmax=3)
+    c2 = ax2.pcolormesh(roms_grid.lon, roms_grid.lat, np.log10(layer_depth), cmap=cmocean.cm.deep, vmin=0, vmax=2.5)
     l2, b2, w2, h2 = ax2.get_position().bounds
     cbax2 = fig.add_axes([l2+w2+0.02, b2, 0.02, h2])
     cbar2 = plt.colorbar(c2, cax=cbax2)
-    ticks2 = [1, 2, 4, 6, 8, 10, 25, 50, 100, 250, 500, 1000]
+    ticks2 = [1, 2, 4, 6, 8, 10, 25, 50, 100, 200, 300]
     cbar2.set_ticks(np.log10(ticks2))
     cbar2.set_ticklabels(ticks2)
     cbar2.set_label('Layer thickness (m)')
@@ -275,7 +278,7 @@ if plot_s4 == True:
 
     ax2 = plt.subplot(1, 3, 3, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info)
-    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
+    ax2 = plot_contours(bathy.lon, bathy.lat, bathy.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.7)
     c = ax2.pcolormesh(roms_grid.lon, roms_grid.lat, u_corr, cmap=cmocean.cm.ice)
     add_subtitle(ax2, f'(b) Correction factor for drift at\n      {z_drift} m above sea floor')
     l1, b1, w1, h1 = ax1.get_position().bounds
@@ -308,13 +311,12 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
                                      p1:Particles, p2:Particles, h_deep_sea:float,
                                      location_info:LocationInfo, title1:str, title2:str, 
                                      output_path:str):
-    bathymetry = BathymetryData.read_from_netcdf('input/cwa_roms_grid.nc')
 
     fig = plt.figure(figsize=(8, 11))
     plt.subplots_adjust(hspace=0.35)
     ax1 = plt.subplot(2, 2, 1, projection=ccrs.PlateCarree())
     ax1 = plot_basic_map(ax1, location_info)
-    ax1 = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.5)
+    ax1 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax1, show=False, show_perth_canyon=False, color='k', linewidths=0.5)
     ranges = [10**x for x in range(0, 7)]
     ticklabels = ['1', '10', '10$^2$', '10$^3$', '10$^4$', '10$^5$', '10$^6$']
     ax1, cbar1, c1 = plot_particle_density(pd_grid, pd1, location_info, ax=ax1, show=False)
@@ -323,7 +325,7 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
 
     ax2 = plt.subplot(2, 2, 2, projection=ccrs.PlateCarree())
     ax2 = plot_basic_map(ax2, location_info, xmarkers='off')
-    ax2 = plot_contours(bathymetry.lon, bathymetry.lat, bathymetry.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.5)
+    ax2 = plot_contours(roms_grid.lon, roms_grid.lat, roms_grid.h, location_info, ax=ax2, show=False, show_perth_canyon=False, color='k', linewidths=0.5)
     ax2, cbar2, c2 = plot_particle_density(pd_grid, pd2, location_info, ax=ax2, show=False)
     cbar2.remove()
     ax2 = add_subtitle(ax2, f'(b) {title2}')
@@ -336,8 +338,8 @@ def plot_particle_density_comparison(pd1:np.ndarray, pd2:np.ndarray, pd_grid:Den
 
     # timeseries age in deep sea
     ax3 = plt.subplot(2, 2, (3, 4))
-    ax3 = _plot_age_in_deep_sea_cumulative_only(ax3, p1, h_deep_sea, label=title1)
-    ax3 = _plot_age_in_deep_sea_cumulative_only(ax3, p2, h_deep_sea, linestyle='--', label=title2)
+    ax3, _, _ = _plot_age_in_deep_sea_cumulative_only(ax3, p1, h_deep_sea, label=title1)
+    ax3, _, _ = _plot_age_in_deep_sea_cumulative_only(ax3, p2, h_deep_sea, linestyle='--', label=title2)
     ax3.set_xlim([0, 100])
     ax3.set_ylim([0, 80])
     ax3.grid(True, linestyle='--', alpha=0.5)
@@ -647,16 +649,19 @@ if plot_s9 == True:
 # ---------------------------------------------------------------------------------
 # REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
 # ---------------------------------------------------------------------------------
-if plot_s10 == True:
+if plot_s10 == True or plot_s11 == True or plot_s12 == True:
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particles = Particles.read_from_netcdf(particle_path)
     h_deep_sea = 200
+    
     dx = 0.01
     location_info_p = get_location_info('perth')
-
     grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
     x, y = np.meshgrid(grid.lon, grid.lat)
 
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
-    particles = Particles.read_from_netcdf(particle_path)
+if plot_s10 == True:
+    grid = DensityGrid(location_info_p.lon_range, location_info_p.lat_range, dx)
+    x, y = np.meshgrid(grid.lon, grid.lat)
 
     # --- Components that make up Figure 6A ---
     output_reefs = f'{plots_dir}figs10.jpg'
