@@ -25,6 +25,7 @@ class PtsConfig:
     dt_out: timedelta
     export_variables: list
     elements: str
+    threshold_velocity: float
     reader: str
     advection_scheme: str
     vertical_advection: bool
@@ -60,6 +61,10 @@ def get_pts_config(input_path:str) -> PtsConfig:
     dt_out = timedelta(seconds=int(config[pts_section_header]['dt_out']))
     export_variables = [i.strip() for i in config[pts_section_header]['export_variables'].split(',')]
     elements = config[pts_section_header]['elements']
+    if 'threshold_velocity' in config[pts_section_header]:
+        threshold_velocity = float(config[pts_section_header]['threshold_velocity'])
+    else:
+        threshold_velocity = None
     reader = config[pts_section_header]['reader']
     advection_scheme = config[pts_section_header]['advection_scheme']
     vertical_advection = bool(0 if config[pts_section_header]['vertical_advection'].lower == 'false' else 1)
@@ -73,7 +78,7 @@ def get_pts_config(input_path:str) -> PtsConfig:
     input_dir_description = config[pts_section_header]['input_dir_description']
 
     pts_config = PtsConfig(start_date, end_date_releases, end_date_run, release_region, run_region, region_name,
-                           input_dir, output_dir, n_thin_initial, dt, dt_out, export_variables, elements,
+                           input_dir, output_dir, n_thin_initial, dt, dt_out, export_variables, elements, threshold_velocity,
                            reader, advection_scheme, vertical_advection, vertical_mixing, horizontal_diffusivity,
                            use_auto_landmask, coastline_action, grid_file, extra_description, sub_output_dir,
                            input_dir_description)
@@ -81,4 +86,5 @@ def get_pts_config(input_path:str) -> PtsConfig:
     return pts_config
 
 if __name__ == '__main__':
-    config = get_pts_config('configs/cwa_perth.ini')
+    config = get_pts_config('configs/thresholdvel_high.ini')
+    config.threshold_velocity

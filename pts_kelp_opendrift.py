@@ -19,12 +19,12 @@ times0, lons0, lats0 = get_releases(config)
 
 # set-up files for simulation
 if config.grid_file is True:
-    grid_file = f'{config.input_dir}/grid.nc'
+    grid_file = f'{config.input_dir}grid.nc'
     if not os.path.exists(grid_file):
         raise ValueError(f'''Expected separate ROMS grid file here: {grid_file}.
                              If no separate file, set grid_file=False in config,
                              otherwise place grid file in correct location.''')
-input_files = f'{config.input_dir}/{config.start_date.year}{config.input_dir_description}/{config.run_region}_*.nc'
+input_files = f'{config.input_dir}{config.start_date.year}{config.input_dir_description}/{config.run_region}_*_his.nc'
 filename = f'{config.region_name}_{config.start_date.strftime("%b")}{config.end_date_run.strftime("%b%Y")}_{config.extra_description}'
 output_file = f'{config.output_dir}{config.sub_output_dir}{filename}.nc'
 create_dir_if_does_not_exist(os.path.dirname(output_file))
@@ -65,6 +65,8 @@ o.set_config('drift:horizontal_diffusivity', config.horizontal_diffusivity)
 o.set_config('general:use_auto_landmask', config.use_auto_landmask)
 o.set_config('general:coastline_action', config.coastline_action)
 o.set_config('seed:ocean_only', True)
+if config.elements == 'bottom_threshold_drifters':
+    o.set_config('transport:threshold_velocity', config.threshold_velocity)
 
 # run simulation
 run_duration = config.end_date_run-config.start_date
