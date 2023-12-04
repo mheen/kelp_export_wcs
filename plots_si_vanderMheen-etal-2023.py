@@ -1,6 +1,7 @@
 from location_info import get_location_info, LocationInfo
 from tools.files import get_dir_from_json
 from tools import log
+from tools.timeseries import add_month_to_time
 from data.bathymetry_data import BathymetryData
 from data.roms_data import RomsData, read_roms_grid_from_netcdf, get_vel_correction_factor_for_specific_height_above_sea_floor
 from data.roms_data import get_daily_mean_roms_data, read_roms_data_from_multiple_netcdfs
@@ -42,9 +43,9 @@ plot_s7 = False # pts sensitivity for threshold velocity
 plot_s8 = False # DSWC conditions timeseries
 plot_s9 = False # example transects for different phi values
 # --- supporting results ---
-plot_s10 = False # plots that make up reef contributions
-plot_s11 = False # export per release location
-plot_s12 = False # example shortest and longest tracks
+plot_s10 = True # plots that make up reef contributions
+plot_s11 = True # export per release location
+plot_s12 = True # example shortest and longest tracks
 
 # ---------------------------------------------------------------------------------
 # Set-up
@@ -58,11 +59,11 @@ locator = mdates.AutoDateLocator(minticks=5, maxticks=15)
 formatter = mdates.ConciseDateFormatter(locator)
 
 start_date = datetime(2017, 3, 1)
-end_date = datetime(2017, 9, 30)
+end_date = datetime(2018, 2, 1)
 
 roms_dir = f'{get_dir_from_json("roms_data")}{start_date.year}/'
 pts_dir = f'{get_dir_from_json("opendrift_output")}'
-plots_dir = f'{get_dir_from_json("plots")}si/'
+plots_dir = f'{get_dir_from_json("plots")}si/fy/'
 
 location_info = get_location_info('cwa_perth')
 time_str = f'{start_date.strftime("%b")}{end_date.strftime("%b%Y")}'
@@ -408,8 +409,8 @@ date_high_phi = time_phi[l_june][np.where(phi[l_june] == high_phi)[0][0]]
 if plot_s8 == True:
     output_dswc_conditions = f'{plots_dir}figs8.jpg'
 
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 9, 30)
+    start_date = datetime(2017, 1, 1)
+    end_date = datetime(2017, 12, 31)
     location_info_perth = get_location_info('perth')
     wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
                                                 lon_range=location_info_perth.lon_range,
@@ -549,7 +550,7 @@ if plot_s8 == True:
     width = []
     for n in range(time_gw[0].month, time_gw[-1].month+1):
         t0 = datetime(time_gw[0].year, n, 1)
-        t1 = datetime(time_gw[0].year, n+1, 1)
+        t1 = add_month_to_time(t0, 1)
         width.append(0.8*(t1-t0).days)
 
     ax6 = plt.subplot(6, 2, (11, 12))
@@ -650,7 +651,7 @@ if plot_s9 == True:
 # REEF CONTRIBUTION ANALYSIS (ACCOMPANIES FIGURE 6A)
 # ---------------------------------------------------------------------------------
 if plot_s10 == True or plot_s11 == True or plot_s12 == True:
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_JanFeb2018_baseline-fy.nc'
     particles = Particles.read_from_netcdf(particle_path)
     h_deep_sea = 200
     

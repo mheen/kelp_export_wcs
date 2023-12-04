@@ -303,7 +303,7 @@ def figure3(particles:Particles, dx=0.02,
     fig = plt.figure(figsize=(12, 6))
     
     # (a) Bunuru (end of March)
-    l_bunuru = np.array([particles.time[t_release[i]].month == 3 for i in range(len(t_release))])
+    l_bunuru = np.array([particles.time[t_release[i]].month in [2, 3] for i in range(len(t_release))])
     t_bunuru = np.where(np.array([particles.time[i].date()==date(2017, 3, 31) for i in range(len(particles.time))]))[0]
     lon_bunuru = particles.lon[l_bunuru, :][:, t_bunuru]
     lat_bunuru = particles.lat[l_bunuru, :][:, t_bunuru]
@@ -419,8 +419,8 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
     ax2.plot(age_arriving_ds, f_decomposed, color=kelp_green, linestyle='-')
     ax2.fill_between(age_arriving_ds, f_decomposed_min, f_decomposed_max, color=kelp_green, alpha=0.5)
     
-    df = pd.DataFrame(np.array([age_arriving_ds, f_decomposed]).transpose(),
-                              columns=['age (days)', f'fraction past 200'])
+    df = pd.DataFrame(np.array([age_arriving_ds, f_decomposed, f_decomposed_min, f_decomposed_max]).transpose(),
+                              columns=['age (days)', 'mean fraction past 200', 'mean-sd fraction past 200', 'mean+sd fraction past 200'])
     
     if output_path_csv_d is not None:
         df.to_csv(output_path_csv_d, index=False)
@@ -442,19 +442,21 @@ def figure4(particles:Particles, h_deep_seas=[200, 400, 600, 800, 1000],
         plt.close()
 
 def figure5(particles:Particles, h_deep_sea=200,
-            show=True, output_path=None):
+            show=True, output_path=None,
+            start_date = datetime(2017, 1, 1),
+            end_date = datetime(2017, 12, 31)):
     
-    fig = plt.figure(figsize=(8, 5))
-    plt.subplots_adjust(hspace=0.3, wspace=0.3)
+    fig = plt.figure(figsize=(11, 5))
+    plt.subplots_adjust(hspace=0.6, wspace=0.4)
     
-    # (a) histogram decomposed particles passing shelf
+    # (b) histogram decomposed particles passing shelf
     t_release = particles.get_release_time_index()
     p_ds, t_ds = particles.get_indices_arriving_in_deep_sea(h_deep_sea)
     
     times_release = particles.time[t_release]
     times_ds = particles.time[t_ds]
     time_bins = []
-    for n in range(particles.time[-1].month-particles.time[0].month+2):
+    for n in range(times_release[-1].month-times_release[0].month+2):
         time_bins.append(add_month_to_time(particles.time[0], n))
     n_releases, _ = np.histogram(times_release, bins=time_bins)
     
@@ -473,31 +475,31 @@ def figure5(particles:Particles, h_deep_sea=200,
     time_bins_int, _ = convert_datetime_to_time(time_bins)
     i_bins = np.digitize(times_ds_int, bins=time_bins_int)
     
-    f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(1, 8)])
+    f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(len(center_bins))])
     f_ds_month_norm = f_ds_month/total_particles*100
-    f_ds_month_min = np.array([np.sum(f_ds_min[i_bins==i]) for i in range(1, 8)])
+    f_ds_month_min = np.array([np.sum(f_ds_min[i_bins==i]) for i in range(len(center_bins))])
     f_ds_month_norm_min = f_ds_month_min/total_particles*100
-    f_ds_month_max = np.array([np.sum(f_ds_max[i_bins==i]) for i in range(1, 8)])
+    f_ds_month_max = np.array([np.sum(f_ds_max[i_bins==i]) for i in range(len(center_bins))])
     f_ds_month_norm_max = f_ds_month_max/total_particles*100
     
     yerr = np.abs(np.array([f_ds_month_norm_min, f_ds_month_norm_max])-f_ds_month_norm)
     
-    ax1 = plt.subplot(1, 2, 1)
+    ax1 = plt.subplot(1, 2, 2)
     ax1.bar(center_bins, f_ds_month_norm, tick_label=tick_labels, width=width, color=kelp_green, yerr=yerr, ecolor='#6fbe81')
     ax1.set_ylabel('Particles passing shelf edge (%)\naccounting for decomposition')
     ax1.set_ylim([0, 11.5])
     ax1.tick_params(axis='y', colors=kelp_green)
     ax1.yaxis.label.set_color(kelp_green)
-    add_subtitle(ax1, '(a) Decomposed particle export')
+    add_subtitle(ax1, '(b) Decomposed particle export')
+    ax1.set_xlim([time_bins[0], time_bins[-1]])
     
     ax2 = ax1.twinx()
     ax2.plot(center_bins, n_releases_norm, 'xk', label='Particles released')
     ax2.set_ylabel('Particles released (%)')
     ax2.set_ylim([0, 28.75])
+    ax2.set_xlim([time_bins[0], time_bins[-1]])
     
-    # (b) histogram dswc occurrence
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 9, 30)
+    # (a) histogram dswc occurrence
     location_info_perth = get_location_info('perth')
     wind_data = read_era5_wind_data_from_netcdf(get_dir_from_json("era5_data"), start_date, end_date,
                                                 lon_range=location_info_perth.lon_range,
@@ -541,18 +543,22 @@ def figure5(particles:Particles, h_deep_sea=200,
         p_dswc.append(np.sum(l_dswc[l_time])/np.sum(l_time))
         
     month_dswc = np.array(month_dswc)
+    month_dswc_extra_month_added = np.append(month_dswc, add_month_to_time(month_dswc[-1], 1))
+    center_month_dswc = np.array(month_dswc_extra_month_added[:-1]+np.diff(month_dswc_extra_month_added)/2)
     str_month_dswc = np.array([t.strftime('%b') for t in month_dswc])
     p_dswc = np.array(p_dswc)
+    width_dswc = 0.8*np.array([dt.days for dt in np.diff(month_dswc_extra_month_added)])
         
-    ax4 = plt.subplot(1, 2, 2)
-    ax4.bar(month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width)
+    ax4 = plt.subplot(1, 2, 1)
+    ax4.bar(center_month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width_dswc)
     ax4.set_ylabel('Suitable conditions for DSWT (% of time)')
     ax4.yaxis.set_label_position("right")
     ax4.yaxis.tick_right()
     ax4.set_ylim([0, 100])
     ax4.tick_params(axis='y', colors=ocean_blue)
     ax4.yaxis.label.set_color(ocean_blue)
-    add_subtitle(ax4, '(b) Dense shelf water transport')
+    add_subtitle(ax4, '(a) Dense shelf water transport')
+    ax4.set_xlim([time_bins[0], time_bins[-1]])
 
     if show is True:
         plt.show()
@@ -785,21 +791,22 @@ if __name__ == '__main__':
     if not os.path.exists('temp_data/perth_wide_distance_100m.csv'):
         save_distance_along_depth_contour()
 
-    plot_dir = get_dir_from_json("plots")
+    plot_dir = f'{get_dir_from_json("plots")}fy/'
 
     # figure1(output_path=f'{plot_dir}fig1.jpg', show=False)
     
     # figure2(output_path=f'{plot_dir}fig2.jpg', show=False)
 
-    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    # particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_MarSep2017_baseline.nc'
+    particle_path = f'{get_dir_from_json("opendrift_output")}cwa_perth_JanFeb2018_baseline-fy.nc'
     particles = Particles.read_from_netcdf(particle_path)
     
-    figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
+    # figure3(particles, output_path=f'{plot_dir}fig3.jpg', show=False)
     
     # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
     
-    # figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
+    figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
     
-    figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
+    # figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
     
     # calculate_g_carbon_sequestered()

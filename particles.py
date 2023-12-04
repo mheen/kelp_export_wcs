@@ -196,20 +196,30 @@ class Particles:
         lon = netcdf['lon'][:].filled(fill_value=np.nan)
         lat = netcdf['lat'][:].filled(fill_value=np.nan)
         z = netcdf['z'][:].filled(fill_value=np.nan)
+        
+        # remove particles that have all nan values
+        l_keep = ~np.all(np.isnan(lon), axis=1)
+        lon = lon[l_keep, :]
+        lat = lat[l_keep, :]
+        z = z[l_keep, :]
 
         if 'sea_water_salinity' in netcdf.variables:
             salt = netcdf['sea_water_salinity'][:].filled(fill_value=np.nan)
+            salt = salt[l_keep, :]
         else:
             salt = None
         if 'sea_water_temperature' in netcdf.variables:
             temp = netcdf['sea_water_temperature'][:].filled(fill_value=np.nan)
+            temp = temp[l_keep, :]
         else:
             temp = None
 
         age = netcdf['age_seconds'][:].filled(fill_value=np.nan)/(24*60*60) # convert age in seconds to age in days
+        age = age[l_keep, :]
 
         if 'moving' in netcdf.variables:
             moving = netcdf['moving'][:].filled(fill_value=-999)
+            moving = moving[l_keep, :]
         else:
             moving = None
 

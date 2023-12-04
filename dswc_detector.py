@@ -329,10 +329,10 @@ def write_fraction_cells_dswc_in_time_to_csv(start_date:datetime, end_date:datet
     df.to_csv(output_path, index=False)
     
 if __name__ == '__main__':
-    start_date = datetime(2017, 3, 1)
-    end_date = datetime(2017, 9, 30)
+    start_date = datetime(2017, 1, 1)
+    end_date = datetime(2017, 12, 31)
     
-    write_fraction_dswc = False
+    write_fraction_dswc = True
     write_gravitational_wind_components = True
     
     roms_dir = f'{get_dir_from_json("roms_data")}2017/'
