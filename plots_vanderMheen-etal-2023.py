@@ -32,6 +32,7 @@ import cmocean
 import os
 import shapefile
 from shapely.geometry import Polygon, Point
+from scipy.stats import pearsonr
 
 converter = mdates.ConciseDateConverter()
 munits.registry[np.datetime64] = converter
@@ -447,7 +448,7 @@ def figure5(particles:Particles, h_deep_sea=200,
             end_date = datetime(2017, 12, 31)):
     
     fig = plt.figure(figsize=(11, 5))
-    plt.subplots_adjust(hspace=0.6, wspace=0.4)
+    plt.subplots_adjust(wspace=0.2)
     
     # (b) histogram decomposed particles passing shelf
     t_release = particles.get_release_time_index()
@@ -552,8 +553,8 @@ def figure5(particles:Particles, h_deep_sea=200,
     ax4 = plt.subplot(1, 2, 1)
     ax4.bar(center_month_dswc, p_dswc*100, color=ocean_blue, tick_label=str_month_dswc, width=width_dswc)
     ax4.set_ylabel('Suitable conditions for DSWT (% of time)')
-    ax4.yaxis.set_label_position("right")
-    ax4.yaxis.tick_right()
+    # ax4.yaxis.set_label_position("right")
+    # ax4.yaxis.tick_right()
     ax4.set_ylim([0, 100])
     ax4.tick_params(axis='y', colors=ocean_blue)
     ax4.yaxis.label.set_color(ocean_blue)
@@ -785,6 +786,11 @@ def calculate_g_carbon_sequestered(fmin=0.19, fmax=0.33, depth=200):
     
     return total_sequestered_min, total_sequestered_max
 
+def calculate_linear_pearson_and_pvalue(input_path:str):
+    df = pd.read_csv(input_path)
+    r, p = pearsonr(df['f_exported'].values, df['f_dswt'].values)
+    return r, p
+
 if __name__ == '__main__': 
     if not os.path.exists('temp_data/perth_wide_monthly_mean_u_cross_100m.csv'):# or not os.path.exists('temp_data/perth_wide_monthly_mean_v_along_100m.csv'):
         save_bottom_cross_shelf_velocities()
@@ -806,6 +812,8 @@ if __name__ == '__main__':
     # figure4(particles, output_path=f'{plot_dir}fig4.jpg', show=False)
     
     figure5(particles, output_path=f'{plot_dir}fig5.jpg', show=False)
+    r, p = calculate_linear_pearson_and_pvalue(f'{plot_dir}fig5.csv')
+    print(f'Linear Pearson correlation between DSWT and export: {r}, with p={p}')
     
     # figure6(particles, output_path=f'{plot_dir}fig6.jpg', show=False)
     
