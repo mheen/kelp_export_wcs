@@ -476,11 +476,11 @@ def figure5(particles:Particles, h_deep_sea=200,
     time_bins_int, _ = convert_datetime_to_time(time_bins)
     i_bins = np.digitize(times_ds_int, bins=time_bins_int)
     
-    f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(len(center_bins))])
+    f_ds_month = np.array([np.sum(f_ds[i_bins==i]) for i in range(1, len(center_bins)+1)])
     f_ds_month_norm = f_ds_month/total_particles*100
-    f_ds_month_min = np.array([np.sum(f_ds_min[i_bins==i]) for i in range(len(center_bins))])
+    f_ds_month_min = np.array([np.sum(f_ds_min[i_bins==i]) for i in range(1, len(center_bins)+1)])
     f_ds_month_norm_min = f_ds_month_min/total_particles*100
-    f_ds_month_max = np.array([np.sum(f_ds_max[i_bins==i]) for i in range(len(center_bins))])
+    f_ds_month_max = np.array([np.sum(f_ds_max[i_bins==i]) for i in range(1, len(center_bins)+1)])
     f_ds_month_norm_max = f_ds_month_max/total_particles*100
     
     yerr = np.abs(np.array([f_ds_month_norm_min, f_ds_month_norm_max])-f_ds_month_norm)
