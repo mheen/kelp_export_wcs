@@ -58,21 +58,22 @@ def write_age_and_percentage_particles_past_shelf_to_csv(particles:Particles, li
 def plot_timeseries_particle_age_percentage_past_shelf(particles:Particles, h_deep_sea:float, litterbags:list,
                                                        show=True, output_path=None):
     
-    fig = plt.figure(figsize=(5, 5))
+    fig = plt.figure(figsize=(3, 5))
     ax = plt.axes()
 
-    linestyles = [':', '--', '-']
+    linestyles = ['-', '-']
+    colors = ['#172cd7', '#1d631b']
 
     for i, litterbag in enumerate(litterbags):
         particles_lb = particles.filter_based_on_release_lon_lat_range(litterbag.lon_range, litterbag.lat_range)
         age, percentage = _get_age_and_percentage_particles_past_shelf(particles_lb, h_deep_sea)
         
-        ax.plot(age, percentage, '-k', linestyle=linestyles[i], label=f'{litterbag.depth} m')
+        ax.plot(age, percentage, linestyle=linestyles[i], color=colors[i], linewidth=3, label=f'{litterbag.depth} m')
 
     ax.set_xlim([0, 60])
     ax.set_xlabel('Particle age (days)')
     
-    ax.set_ylim([0, 100])
+    ax.set_ylim([0, 80])
     ax.set_ylabel('Particles past continental shelf edge (%)')
 
     ax.legend(loc='lower right', title='Release sites')
@@ -146,12 +147,12 @@ def plot_litterbag_locations_and_tracks_past_shelf(particles:Particles, h_deep_s
 if __name__ == '__main__':
     h_deep_sea = 200 # m (continental shelf edge)
 
-    particles = Particles.read_from_netcdf(f'{get_dir_from_json("opendrift_output")}litterbags/litterbags_MarAug2017.nc')
+    particles = Particles.read_from_netcdf(f'{get_dir_from_json("opendrift_output")}litterbags/litterbags_JanFeb2018.nc')
 
     litterbags = get_litterbags()
 
     for litterbag in litterbags:
-        output_path = f'{get_dir_from_json("plots")}litterbags/litterbag_{litterbag.name}_particle_age_percentage.csv'
+        output_path = f'{get_dir_from_json("plots")}litterbags/litterbag_{litterbag.name}_particle_age_percentage_full_year.csv'
         write_age_and_percentage_particles_past_shelf_to_csv(particles, litterbag, h_deep_sea, output_path)
 
     location_info = get_location_info('cwa_perth_zoom2')
@@ -159,5 +160,5 @@ if __name__ == '__main__':
     output_path = f'{get_dir_from_json("plots")}litterbags/example_particle_tracks_from_litterbags_to_shelf_edge.jpg'
     plot_litterbag_locations_and_tracks_past_shelf(particles, h_deep_sea, litterbags, location_info, bathymetry, show=False, output_path=output_path)
 
-    output_path = f'{get_dir_from_json("plots")}litterbags/age_percentage_past_shelf_from_litterbags.jpg'
+    output_path = f'{get_dir_from_json("plots")}litterbags/age_percentage_past_shelf_from_litterbags_full_year.jpg'
     plot_timeseries_particle_age_percentage_past_shelf(particles, h_deep_sea, litterbags, show=False, output_path=output_path)

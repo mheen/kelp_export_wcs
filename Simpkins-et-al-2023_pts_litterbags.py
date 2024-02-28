@@ -16,9 +16,9 @@ input_dir = f'{get_dir_from_json("roms_data")}'
 grid_file = True
 run_region = 'cwa'
 region_name = 'litterbags'
-start_date = datetime(2017, 3, 1)
-end_date_releases = datetime(2017, 7, 31)
-end_date_run = datetime(2017, 8, 31)
+start_date = datetime(2017, 1, 1)
+end_date_releases = datetime(2017, 12, 31)
+end_date_run = datetime(2018, 2, 1)
 dt = 600
 dt_out = 10800
 export_variables = ['z', 'age_seconds', 'sea_water_temperature', 'sea_water_salinity']
@@ -38,12 +38,12 @@ times0 = get_n_daily_release_times(start_date, end_date_releases)
 
 # set-up files for simulation
 if grid_file is True:
-    grid_file = f'{input_dir}{run_region}/grid.nc'
+    grid_file = f'{input_dir}grid.nc'
     if not os.path.exists(grid_file):
         raise ValueError(f'''Expected separate ROMS grid file here: {grid_file}.
                              If no separate file, set grid_file=False in config,
                              otherwise place grid file in correct location.''')
-input_files = f'{input_dir}{run_region}/{start_date.year}/{run_region}_*.nc'
+input_files = f'{input_dir}{start_date.year}/{run_region}_*.nc'
 filename = f'{region_name}_{start_date.strftime("%b")}{end_date_run.strftime("%b%Y")}'
 output_file = f'{output_dir}{filename}.nc'
 create_dir_if_does_not_exist(os.path.dirname(output_file))
