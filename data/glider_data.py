@@ -95,7 +95,7 @@ class GliderData:
 
     def plot_transect(self, ax=None, show=True, parameter='density',
                       cmap='RdBu_r', vmin=None, vmax=None,
-                      dz_interp=1, dt_interp=1/24):
+                      dz_interp=1, dt_interp=1/24, fill_color='#989898'):
         '''Plots full transect based on fitted glider'''
 
         if parameter.lower().startswith('t'):
@@ -150,7 +150,7 @@ class GliderData:
         cbar = plt.colorbar(c)
         cbar.set_label(cbar_label)
         ax.plot(self.cumtime, z_bottom, '-k')
-        ax.fill_between(self.cumtime, z[0], z_bottom, color='#989898')
+        ax.fill_between(self.cumtime, z[0], z_bottom, color=fill_color)
         
         ax.set_xlim([0, self.cumtime[-1]])
         ax.set_ylim([z[0], 0])

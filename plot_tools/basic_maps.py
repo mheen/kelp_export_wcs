@@ -22,7 +22,7 @@ def add_grid(ax:plt.axes, meridians:list, parallels:list,
     if xmarkers == 'top':
         ax.xaxis.tick_top()
     if xmarkers == 'off':
-        ax.set_yticklabels([])
+        ax.set_xticklabels([])
     if ymarkers == 'right':
         ax.yaxis.tick_right()
     if ymarkers == 'off':
@@ -35,15 +35,15 @@ def add_grid(ax:plt.axes, meridians:list, parallels:list,
 
 def plot_basic_map(ax:plt.axes, location_info:LocationInfo,
                    xmarkers='bottom', ymarkers='left',
-                   draw_grid=False, zorder_c=5) -> plt.axes:
+                   draw_grid=False, zorder_c=5, facecolor='#989898') -> plt.axes:
     shp = shapereader.Reader('input/GSHHS_coastline_GSR.shp')
     for _, geometry in zip(shp.records(), shp.geometries()):
-        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='#989898',
+        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor=facecolor,
                            edgecolor='black', zorder=zorder_c)
         
     shp2 = shapereader.Reader('input/GI.shp')
     for _, geometry in zip(shp2.records(), shp2.geometries()):
-        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='#989898',
+        ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor=facecolor,
                           edgecolor='black', zorder=100)
     
     ax = add_grid(ax, location_info.meridians, location_info.parallels, xmarkers, ymarkers, draw_grid)
